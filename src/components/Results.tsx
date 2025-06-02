@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   Trophy, 
   Target, 
@@ -13,9 +14,20 @@ import {
   XCircle, 
   BarChart3,
   Download,
-  Share2
+  Share2,
+  History
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface TestResults {
   wpm: number;
@@ -26,13 +38,17 @@ interface TestResults {
   correctWords: number;
   incorrectWords: number;
   totalKeystrokes: number;
+  typedKeystrokes: number;
   correctKeystrokes: number;
-  keystrokeAccuracy?: number; // Added keystroke accuracy
+  keystrokeAccuracy?: number;
   errors: number;
   timeTaken: number;
   totalTime: number;
   testTitle: string;
   language: string;
+  originalText?: string;
+  typedText?: string;
+  wrongWordIndices?: number[];
 }
 
 interface ResultsProps {
@@ -40,18 +56,129 @@ interface ResultsProps {
 }
 
 const Results = ({ results }: ResultsProps) => {
-  if (!results) {
+  const [showAllResults, setShowAllResults] = React.useState(false);
+
+  // Fetch user's test history
+  const { data: testHistory = [] } = useQuery({
+    queryKey: ['test-history'],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return [];
+
+      const { data, error } = await supabase
+        .from('test_results')
+        .select(`
+          *,
+          typing_tests(title, language, category, difficulty)
+        `)
+        .eq('user_id', user.id)
+        .order('completed_at', { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: showAllResults
+  });
+
+  if (!results && !showAllResults) {
     return (
       <Card>
         <CardContent className="p-8 text-center">
           <Trophy className="h-16 w-16 mx-auto mb-4 text-gray-400" />
           <h3 className="text-lg font-semibold mb-2">No Results Yet</h3>
-          <p className="text-gray-600 dark:text-gray-400">
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
             Complete a typing test to see your detailed results here.
           </p>
+          <Button 
+            variant="outline" 
+            onClick={() => setShowAllResults(true)}
+            className="flex items-center gap-2"
+          >
+            <History className="h-4 w-4" />
+            View All Results
+          </Button>
         </CardContent>
       </Card>
     );
+  }
+
+  if (showAllResults) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <History className="h-5 w-5" />
+              Test History
+            </CardTitle>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowAllResults(false)}
+              disabled={!results}
+            >
+              Back to Latest Results
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <ScrollArea className="h-96">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Test</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>WPM</TableHead>
+                    <TableHead>Accuracy</TableHead>
+                    <TableHead>Time</TableHead>
+                    <TableHead>Keystrokes</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {testHistory.map((test: any) => (
+                    <TableRow key={test.id}>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{test.typing_tests?.title || 'Unknown Test'}</div>
+                          <div className="flex gap-1 mt-1">
+                            <Badge variant="outline" className="text-xs">
+                              {test.typing_tests?.language === 'hindi' ? 'हिंदी' : 'English'}
+                            </Badge>
+                            <Badge variant="outline" className="text-xs">
+                              {test.typing_tests?.difficulty}
+                            </Badge>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {new Date(test.completed_at).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="font-medium">{test.wpm}</TableCell>
+                      <TableCell>{test.accuracy.toFixed(1)}%</TableCell>
+                      <TableCell>
+                        {test.time_taken >= 60 
+                          ? `${Math.floor(test.time_taken / 60)}:${(test.time_taken % 60).toString().padStart(2, '0')}`
+                          : `${test.time_taken}s`
+                        }
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          <div>Total: {test.total_keystrokes}</div>
+                          <div className="text-green-600">Correct: {test.correct_keystrokes}</div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!results) {
+    return null;
   }
 
   const getPerformanceLevel = (wpm: number) => {
@@ -64,7 +191,6 @@ const Results = ({ results }: ResultsProps) => {
 
   const performance = getPerformanceLevel(results.wpm);
 
-  // Format time display (minutes:seconds)
   const formatTime = (seconds: number) => {
     if (seconds >= 60) {
       const minutes = Math.floor(seconds / 60);
@@ -74,12 +200,11 @@ const Results = ({ results }: ResultsProps) => {
     return `${seconds}s`;
   };
 
-  // Calculate more accurate metrics
-  const errorRate = results.totalKeystrokes > 0 ? 
-    Math.round((results.errors / results.totalKeystrokes) * 100) : 0;
+  const errorRate = results.typedKeystrokes > 0 ? 
+    Math.round((results.errors / results.typedKeystrokes) * 100) : 0;
   
   const keystrokeAccuracy = results.keystrokeAccuracy || 
-    (results.totalKeystrokes > 0 ? Math.round((results.correctKeystrokes / results.totalKeystrokes) * 100) : 0);
+    (results.typedKeystrokes > 0 ? Math.round((results.correctKeystrokes / results.typedKeystrokes) * 100) : 0);
 
   const shareResults = () => {
     const text = `I just completed a typing test!\n🚀 Speed: ${results.wpm} WPM\n🎯 Accuracy: ${results.accuracy}%\n⏱️ Time: ${formatTime(results.timeTaken)}\n\nTry it yourself!`;
@@ -117,6 +242,43 @@ const Results = ({ results }: ResultsProps) => {
     a.download = `typing-test-results-${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  // Render paragraph with color-coded words
+  const renderColorCodedText = () => {
+    if (!results.originalText) return null;
+
+    const originalWords = results.originalText.split(' ');
+    const typedWords = results.typedText ? results.typedText.split(' ') : [];
+    const wrongWordIndices = new Set(results.wrongWordIndices || []);
+
+    return (
+      <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg text-lg leading-relaxed">
+        {originalWords.map((word, index) => {
+          let className = 'mr-2 px-1 py-0.5 rounded ';
+          
+          if (index < typedWords.length) {
+            // Word was typed
+            if (wrongWordIndices.has(index)) {
+              // Wrong word
+              className += 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300';
+            } else {
+              // Correct word
+              className += 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300';
+            }
+          } else {
+            // Word was not typed
+            className += 'text-gray-500 dark:text-gray-400';
+          }
+
+          return (
+            <span key={index} className={className}>
+              {word}
+            </span>
+          );
+        })}
+      </div>
+    );
   };
 
   return (
@@ -185,6 +347,33 @@ const Results = ({ results }: ResultsProps) => {
         </Card>
       </div>
 
+      {/* Text Analysis */}
+      {results.originalText && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Target className="h-5 w-5" />
+              Text Analysis
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                <span className="inline-block w-4 h-4 bg-green-100 dark:bg-green-900/30 rounded mr-2"></span>
+                Correct words
+                <span className="inline-block w-4 h-4 bg-red-100 dark:bg-red-900/30 rounded mx-2 ml-4"></span>
+                Wrong words
+                <span className="inline-block w-4 h-4 bg-gray-200 dark:bg-gray-700 rounded mx-2 ml-4"></span>
+                Not typed
+              </div>
+              <ScrollArea className="h-32">
+                {renderColorCodedText()}
+              </ScrollArea>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Detailed Statistics */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Words Analysis */}
@@ -235,6 +424,10 @@ const Results = ({ results }: ResultsProps) => {
             <div className="flex justify-between items-center">
               <span className="text-gray-600 dark:text-gray-400">Total Keystrokes</span>
               <span className="font-semibold">{results.totalKeystrokes}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-blue-600 dark:text-blue-400">Typed Keystrokes</span>
+              <span className="font-semibold text-blue-600">{results.typedKeystrokes}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-green-600 dark:text-green-400">Correct Keystrokes</span>
@@ -364,6 +557,14 @@ const Results = ({ results }: ResultsProps) => {
       <Card>
         <CardContent className="p-6">
           <div className="flex flex-wrap gap-4 justify-center">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowAllResults(true)}
+              className="flex items-center gap-2"
+            >
+              <History className="h-4 w-4" />
+              View All Results
+            </Button>
             <Button onClick={shareResults} className="flex items-center gap-2">
               <Share2 className="h-4 w-4" />
               Share Results

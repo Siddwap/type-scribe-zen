@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -49,6 +48,7 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
   const [wrongWords, setWrongWords] = useState<Set<number>>(new Set());
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [totalKeystrokes, setTotalKeystrokes] = useState(0);
+  const [typedKeystrokes, setTypedKeystrokes] = useState(0);
   const [correctKeystrokes, setCorrectKeystrokes] = useState(0);
   const [words, setWords] = useState<string[]>([]);
   const [selectedTest, setSelectedTest] = useState<TypingTest | null>(currentTest);
@@ -57,6 +57,7 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const displayRef = useRef<HTMLDivElement>(null);
+  const currentWordRef = useRef<HTMLSpanElement>(null);
 
   // Fetch available tests and organize by category
   const { data: availableTests = [] } = useQuery({
@@ -108,7 +109,7 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     if (selectedTest) {
       const testWords = selectedTest.content.split(' ');
       setWords(testWords);
-      setTimeLeft(selectedTest.time_limit);
+      setTimeLeft(selectedTest.time_limit * 60); // Convert minutes to seconds
       resetTest();
     }
   }, [selectedTest]);
@@ -125,6 +126,29 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     return () => clearInterval(interval);
   }, [isActive, timeLeft]);
 
+  // Auto-scroll to current word
+  useEffect(() => {
+    if (currentWordRef.current && displayRef.current && isActive) {
+      const wordElement = currentWordRef.current;
+      const containerElement = displayRef.current;
+      
+      const wordRect = wordElement.getBoundingClientRect();
+      const containerRect = containerElement.getBoundingClientRect();
+      
+      // Calculate if we need to scroll horizontally
+      if (wordRect.left < containerRect.left || wordRect.right > containerRect.right) {
+        const scrollLeft = wordElement.offsetLeft - containerElement.offsetWidth / 2 + wordElement.offsetWidth / 2;
+        containerElement.scrollLeft = Math.max(0, scrollLeft);
+      }
+      
+      // Calculate if we need to scroll vertically
+      if (wordRect.top < containerRect.top || wordRect.bottom > containerRect.bottom) {
+        const scrollTop = wordElement.offsetTop - containerElement.offsetHeight / 2 + wordElement.offsetHeight / 2;
+        containerElement.scrollTop = Math.max(0, scrollTop);
+      }
+    }
+  }, [currentWordIndex, isActive]);
+
   const resetTest = () => {
     setIsActive(false);
     setIsFinished(false);
@@ -134,9 +158,10 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     setWrongWords(new Set());
     setStartTime(null);
     setTotalKeystrokes(0);
+    setTypedKeystrokes(0);
     setCorrectKeystrokes(0);
     if (selectedTest) {
-      setTimeLeft(selectedTest.time_limit);
+      setTimeLeft(selectedTest.time_limit * 60); // Convert minutes to seconds
     }
   };
 
@@ -148,29 +173,29 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Handle space key to move to next word
+    if (!isActive && e.key !== 'Tab') {
+      startTest();
+    }
+    
+    setTotalKeystrokes(prev => prev + 1);
+    setTypedKeystrokes(prev => prev + 1);
+
     if (e.key === ' ') {
       e.preventDefault();
       
-      if (!isActive && userInput.length === 0) {
-        startTest();
-      }
-      
-      // Move to next word
       const currentTypedWords = userInput.trim().split(' ');
       const expectedWord = words[currentWordIndex];
       const typedWord = currentTypedWords[currentWordIndex] || '';
       
-      // Check if current word is wrong
       if (typedWord !== expectedWord) {
         setWrongWords(prev => new Set([...prev, currentWordIndex]));
+      } else {
+        setCorrectKeystrokes(prev => prev + typedWord.length + 1); // +1 for space
       }
       
-      // Move to next word
       if (currentWordIndex < words.length - 1) {
         setCurrentWordIndex(prev => prev + 1);
         setUserInput(prev => prev + ' ');
-        setTotalKeystrokes(prev => prev + 1);
       }
     }
   };
@@ -178,7 +203,6 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     
-    // Prevent manual spaces - only allow through space key handler
     if (value.includes(' ') && !userInput.includes(' ')) {
       return;
     }
@@ -187,9 +211,6 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
       startTest();
     }
 
-    setTotalKeystrokes(prev => prev + 1);
-    
-    // Handle backspace restrictions
     if (value.length < userInput.length) {
       if (settings.backspaceMode === 'disabled') {
         return;
@@ -203,7 +224,6 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
 
     setUserInput(value);
     
-    // Calculate correct keystrokes and wrong words
     const typedWords = value.split(' ');
     const currentTypedWord = typedWords[currentWordIndex] || '';
     const expectedWord = words[currentWordIndex] || '';
@@ -211,26 +231,23 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     let correctCount = 0;
     const newWrongWords = new Set<number>();
     
-    // Count correct characters in current word
     for (let i = 0; i < Math.min(currentTypedWord.length, expectedWord.length); i++) {
       if (currentTypedWord[i] === expectedWord[i]) {
         correctCount++;
       }
     }
     
-    // Add correct characters from completed words
     for (let i = 0; i < currentWordIndex; i++) {
       const typedWord = typedWords[i] || '';
       const expectedWordAtIndex = words[i] || '';
       
       if (typedWord === expectedWordAtIndex) {
-        correctCount += typedWord.length;
+        correctCount += typedWord.length + 1; // +1 for space
       } else {
         newWrongWords.add(i);
       }
     }
     
-    // Check if current word is wrong
     if (currentTypedWord.length > 0 && currentTypedWord !== expectedWord.substring(0, currentTypedWord.length)) {
       newWrongWords.add(currentWordIndex);
     }
@@ -238,14 +255,6 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     setCorrectKeystrokes(correctCount);
     setWrongWords(newWrongWords);
     
-    // Auto-scroll
-    if (displayRef.current && textareaRef.current) {
-      const lines = Math.floor(value.length / 80);
-      const scrollPosition = lines * 24;
-      displayRef.current.scrollTop = scrollPosition;
-    }
-    
-    // Check if test is complete
     if (currentWordIndex >= words.length - 1 && currentTypedWord === expectedWord) {
       handleTestComplete();
     }
@@ -258,22 +267,19 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     setIsFinished(true);
     
     const endTime = new Date();
-    const timeTaken = startTime ? (endTime.getTime() - startTime.getTime()) / 1000 : selectedTest?.time_limit || 60;
+    const timeTaken = startTime ? (endTime.getTime() - startTime.getTime()) / 1000 : selectedTest?.time_limit * 60 || 60;
     
     const typedWords = userInput.trim().split(' ').filter(word => word.length > 0);
     const totalTypedChars = typedWords.join('').length;
     const correctWords = typedWords.filter((word, index) => word === words[index]).length;
     const incorrectWords = typedWords.length - correctWords;
     
-    // More accurate calculations
     const accuracy = typedWords.length > 0 ? (correctWords / typedWords.length) * 100 : 0;
     
-    // WPM calculation (standard: 5 characters = 1 word)
     const wpm = Math.round((correctKeystrokes / 5) / (timeTaken / 60));
-    const grossWpm = Math.round((totalTypedChars / 5) / (timeTaken / 60));
+    const grossWpm = Math.round((typedKeystrokes / 5) / (timeTaken / 60));
     
-    // Keystroke accuracy
-    const keystrokeAccuracy = totalKeystrokes > 0 ? (correctKeystrokes / totalKeystrokes) * 100 : 0;
+    const keystrokeAccuracy = typedKeystrokes > 0 ? (correctKeystrokes / typedKeystrokes) * 100 : 0;
 
     const results = {
       wpm,
@@ -284,16 +290,19 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
       correctWords,
       incorrectWords,
       totalKeystrokes,
+      typedKeystrokes,
       correctKeystrokes,
       keystrokeAccuracy: Math.round(keystrokeAccuracy * 100) / 100,
       errors: wrongWords.size,
       timeTaken: Math.round(timeTaken),
-      totalTime: selectedTest?.time_limit || 60,
+      totalTime: selectedTest?.time_limit * 60 || 60,
       testTitle: selectedTest?.title || 'Unknown Test',
-      language: selectedTest?.language || 'english'
+      language: selectedTest?.language || 'english',
+      originalText: words.join(' '),
+      typedText: userInput,
+      wrongWordIndices: Array.from(wrongWords)
     };
 
-    // Save results to database
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user && selectedTest) {
@@ -318,7 +327,7 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     }
     
     onComplete(results);
-  }, [isFinished, startTime, userInput, words, totalKeystrokes, correctKeystrokes, selectedTest, onComplete, wrongWords, currentWordIndex]);
+  }, [isFinished, startTime, userInput, words, totalKeystrokes, typedKeystrokes, correctKeystrokes, selectedTest, onComplete, wrongWords, currentWordIndex]);
 
   const renderText = () => {
     if (!selectedTest) return null;
@@ -327,29 +336,30 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
       const typedWords = userInput.split(' ');
       const typedWord = typedWords[wordIndex] || '';
       
-      let wordClassName = 'mr-2 ';
+      let wordClassName = 'mr-2 px-1 py-0.5 rounded ';
       
       if (wordIndex < currentWordIndex) {
-        // Completed word
         if (typedWord === word) {
           wordClassName += 'text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30';
         } else {
           wordClassName += 'text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30';
         }
       } else if (wordIndex === currentWordIndex) {
-        // Current word
         if (settings.highlightText && isActive) {
-          wordClassName += 'bg-blue-200 dark:bg-blue-800 text-blue-900 dark:text-blue-100';
+          wordClassName += 'bg-blue-200 dark:bg-blue-800 text-blue-900 dark:text-blue-100 border-2 border-blue-400';
         } else {
           wordClassName += 'text-gray-900 dark:text-gray-100';
         }
       } else {
-        // Future words
         wordClassName += 'text-gray-500 dark:text-gray-400';
       }
       
       return (
-        <span key={wordIndex} className={wordClassName}>
+        <span 
+          key={wordIndex} 
+          className={wordClassName}
+          ref={wordIndex === currentWordIndex ? currentWordRef : null}
+        >
           {word}
         </span>
       );
@@ -419,7 +429,7 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
                           <div className="font-semibold">{test.title}</div>
                           <div className="flex gap-2 mt-1">
                             <Badge variant="outline" className="text-xs">{test.difficulty}</Badge>
-                            <Badge variant="outline" className="text-xs">{formatTime(test.time_limit)}</Badge>
+                            <Badge variant="outline" className="text-xs">{test.time_limit}min</Badge>
                           </div>
                           <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                             {test.content.split(' ').length} words
@@ -470,7 +480,6 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
         </Card>
       </div>
 
-      {/* Progress Bar */}
       <Progress value={progress} className="h-2" />
 
       {/* Test Text Display */}
@@ -495,10 +504,9 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Text Display */}
           <div 
             ref={displayRef}
-            className={`p-4 bg-gray-50 dark:bg-gray-800 rounded-lg h-32 overflow-y-auto text-lg leading-relaxed ${
+            className={`p-4 bg-gray-50 dark:bg-gray-800 rounded-lg h-32 overflow-auto text-lg leading-relaxed whitespace-nowrap ${
               selectedTest.language === 'hindi' ? 'font-mangal' : 'font-mono'
             }`}
             style={selectedTest.language === 'hindi' ? { fontFamily: 'Noto Sans Devanagari, Mangal, serif' } : {}}
@@ -506,7 +514,6 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
             {renderText()}
           </div>
 
-          {/* Typing Area */}
           <div className="space-y-2">
             <textarea
               ref={textareaRef}
@@ -517,8 +524,7 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
               placeholder={isActive ? "Type the text above. Press space to move to next word..." : "Click here and start typing to begin the test"}
               className={`w-full h-32 p-4 border rounded-lg resize-none text-lg 
                 ${selectedTest.language === 'hindi' ? 'font-mangal' : 'font-mono'}
-                ${isFinished ? 'bg-gray-100 dark:bg-gray-800' : 'bg-white dark:bg-gray-900'} 
-                text-gray-900 dark:text-gray-100 
+                ${isFinished ? 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400' : 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100'} 
                 border-gray-300 dark:border-gray-600 
                 focus:border-blue-500 dark:focus:border-blue-400 
                 focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400
