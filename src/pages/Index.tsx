@@ -7,6 +7,7 @@ import { Moon, Sun, Keyboard, Target, Trophy, Settings, User } from 'lucide-reac
 import { Toaster } from '@/components/ui/toaster';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { User, Session } from '@supabase/supabase-js';
 import Auth from '@/components/Auth';
 import AdminPanel from '@/components/AdminPanel';
 import TypingTest from '@/components/TypingTest';
@@ -19,9 +20,11 @@ const queryClient = new QueryClient();
 const Index = () => {
   const [darkMode, setDarkMode] = useState(false);
   const [activeTab, setActiveTab] = useState('test');
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [testSettings, setTestSettings] = useState({
     highlightText: true,
     showErrors: true,
@@ -33,34 +36,77 @@ const Index = () => {
   const [testResults, setTestResults] = useState(null);
 
   useEffect(() => {
-    // Check initial auth state
+    let mounted = true;
+
     const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setUser(session.user);
-        await checkUserRole(session.user.id);
+      try {
+        console.log('Checking initial auth state...');
+        
+        // Set up auth state listener FIRST
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+          console.log('Auth state changed:', event, session?.user?.id);
+          
+          if (!mounted) return;
+
+          // Only synchronous state updates here
+          setSession(session);
+          setUser(session?.user ?? null);
+          setAuthError(null);
+
+          // Defer any Supabase calls to prevent deadlock
+          if (session?.user) {
+            setTimeout(() => {
+              if (mounted) {
+                checkUserRole(session.user.id);
+              }
+            }, 0);
+          } else {
+            setIsAdmin(false);
+          }
+        });
+
+        // THEN check for existing session
+        const { data: { session: initialSession }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Error getting session:', error);
+          setAuthError(error.message);
+        } else if (initialSession) {
+          console.log('Found existing session for user:', initialSession.user.id);
+          setSession(initialSession);
+          setUser(initialSession.user);
+          
+          // Defer role check
+          setTimeout(() => {
+            if (mounted) {
+              checkUserRole(initialSession.user.id);
+            }
+          }, 0);
+        }
+
+        setIsLoading(false);
+
+        return () => {
+          mounted = false;
+          subscription.unsubscribe();
+        };
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+        setAuthError('Failed to initialize authentication');
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
 
     checkAuth();
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        setUser(session.user);
-        await checkUserRole(session.user.id);
-      } else {
-        setUser(null);
-        setIsAdmin(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const checkUserRole = async (userId: string) => {
     try {
+      console.log('Checking user role for:', userId);
       const { data, error } = await supabase
         .from('profiles')
         .select('role')
@@ -68,10 +114,13 @@ const Index = () => {
         .single();
       
       if (!error && data) {
+        console.log('User role:', data.role);
         setIsAdmin(data.role === 'admin');
+      } else if (error) {
+        console.error('Error checking user role:', error);
       }
     } catch (error) {
-      console.error('Error checking user role:', error);
+      console.error('Error in checkUserRole:', error);
     }
   };
 
@@ -89,13 +138,24 @@ const Index = () => {
   };
 
   const handleAuthSuccess = () => {
+    console.log('Auth success callback triggered');
     // Auth state will be handled by the auth listener
   };
 
-  const handleSignOut = () => {
-    setUser(null);
-    setIsAdmin(false);
-    setActiveTab('test');
+  const handleSignOut = async () => {
+    try {
+      console.log('Signing out...');
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      
+      setUser(null);
+      setSession(null);
+      setIsAdmin(false);
+      setActiveTab('test');
+      console.log('Sign out successful');
+    } catch (error) {
+      console.error('Sign out error:', error);
+    }
   };
 
   if (isLoading) {
@@ -109,7 +169,24 @@ const Index = () => {
     );
   }
 
-  if (!user) {
+  if (authError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-500 mb-4">Authentication Error</div>
+          <p className="text-gray-600">{authError}</p>
+          <Button 
+            onClick={() => window.location.reload()} 
+            className="mt-4"
+          >
+            Refresh Page
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session || !user) {
     return (
       <QueryClientProvider client={queryClient}>
         <div className={darkMode ? 'dark' : ''}>

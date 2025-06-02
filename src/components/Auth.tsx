@@ -31,10 +31,14 @@ const Auth = ({ onAuthSuccess }: AuthProps) => {
     setIsLoading(true);
 
     try {
+      console.log('Attempting sign up for:', formData.email);
+      const redirectUrl = `${window.location.origin}/`;
+      
       const { data, error } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
+          emailRedirectTo: redirectUrl,
           data: {
             full_name: formData.fullName
           }
@@ -44,13 +48,20 @@ const Auth = ({ onAuthSuccess }: AuthProps) => {
       if (error) throw error;
 
       if (data.user) {
+        console.log('Sign up successful:', data.user.id);
         toast({
           title: "Account created successfully!",
-          description: "Please check your email to verify your account."
+          description: data.user.email_confirmed_at 
+            ? "You can now start using the app." 
+            : "Please check your email to verify your account."
         });
-        onAuthSuccess();
+        
+        if (data.user.email_confirmed_at) {
+          onAuthSuccess();
+        }
       }
     } catch (error: any) {
+      console.error('Sign up error:', error);
       toast({
         title: "Sign up failed",
         description: error.message,
@@ -66,6 +77,7 @@ const Auth = ({ onAuthSuccess }: AuthProps) => {
     setIsLoading(true);
 
     try {
+      console.log('Attempting sign in for:', formData.email);
       const { data, error } = await supabase.auth.signInWithPassword({
         email: formData.email,
         password: formData.password
@@ -73,7 +85,8 @@ const Auth = ({ onAuthSuccess }: AuthProps) => {
 
       if (error) throw error;
 
-      if (data.user) {
+      if (data.user && data.session) {
+        console.log('Sign in successful:', data.user.id);
         toast({
           title: "Welcome back!",
           description: "You have successfully signed in."
@@ -81,9 +94,18 @@ const Auth = ({ onAuthSuccess }: AuthProps) => {
         onAuthSuccess();
       }
     } catch (error: any) {
+      console.error('Sign in error:', error);
+      let errorMessage = error.message;
+      
+      if (error.message.includes('Invalid login credentials')) {
+        errorMessage = 'Invalid email or password. Please check your credentials and try again.';
+      } else if (error.message.includes('Email not confirmed')) {
+        errorMessage = 'Please check your email and click the confirmation link before signing in.';
+      }
+      
       toast({
         title: "Sign in failed",
-        description: error.message,
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -128,6 +150,7 @@ const Auth = ({ onAuthSuccess }: AuthProps) => {
                     value={formData.email}
                     onChange={(e) => handleInputChange('email', e.target.value)}
                     required
+                    disabled={isLoading}
                   />
                 </div>
 
@@ -144,6 +167,7 @@ const Auth = ({ onAuthSuccess }: AuthProps) => {
                       value={formData.password}
                       onChange={(e) => handleInputChange('password', e.target.value)}
                       required
+                      disabled={isLoading}
                     />
                     <Button
                       type="button"
@@ -151,6 +175,7 @@ const Auth = ({ onAuthSuccess }: AuthProps) => {
                       size="sm"
                       className="absolute right-0 top-0 h-full px-3"
                       onClick={() => setShowPassword(!showPassword)}
+                      disabled={isLoading}
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
@@ -181,6 +206,7 @@ const Auth = ({ onAuthSuccess }: AuthProps) => {
                     value={formData.fullName}
                     onChange={(e) => handleInputChange('fullName', e.target.value)}
                     required
+                    disabled={isLoading}
                   />
                 </div>
 
@@ -196,6 +222,7 @@ const Auth = ({ onAuthSuccess }: AuthProps) => {
                     value={formData.email}
                     onChange={(e) => handleInputChange('email', e.target.value)}
                     required
+                    disabled={isLoading}
                   />
                 </div>
 
@@ -213,6 +240,7 @@ const Auth = ({ onAuthSuccess }: AuthProps) => {
                       onChange={(e) => handleInputChange('password', e.target.value)}
                       required
                       minLength={6}
+                      disabled={isLoading}
                     />
                     <Button
                       type="button"
@@ -220,6 +248,7 @@ const Auth = ({ onAuthSuccess }: AuthProps) => {
                       size="sm"
                       className="absolute right-0 top-0 h-full px-3"
                       onClick={() => setShowPassword(!showPassword)}
+                      disabled={isLoading}
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
