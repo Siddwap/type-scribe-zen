@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Moon, Sun, Keyboard, Target, Trophy, Settings, User } from 'lucide-react';
+import { Moon, Sun, Keyboard, Target, Trophy, Settings, User as UserIcon } from 'lucide-react';
 import { Toaster } from '@/components/ui/toaster';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -253,7 +253,7 @@ const Index = () => {
                 Results
               </TabsTrigger>
               <TabsTrigger value="profile" className="flex items-center gap-2">
-                <User className="h-4 w-4" />
+                <UserIcon className="h-4 w-4" />
                 Profile
               </TabsTrigger>
               {isAdmin && (
