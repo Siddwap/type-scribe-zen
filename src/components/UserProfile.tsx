@@ -108,9 +108,6 @@ const UserProfile = ({ user, onSignOut }: UserProfileProps) => {
                 <h2 className="text-2xl font-bold">{profile?.full_name || 'User'}</h2>
                 <p className="text-gray-600 dark:text-gray-400">{profile?.email}</p>
                 <div className="flex gap-2 mt-2">
-                  <Badge variant={profile?.role === 'admin' ? 'default' : 'outline'}>
-                    {profile?.role || 'user'}
-                  </Badge>
                   {totalTests > 0 && (
                     <Badge variant="outline">
                       {totalTests} test{totalTests !== 1 ? 's' : ''} completed

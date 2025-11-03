@@ -117,7 +117,7 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
       queryClient.invalidateQueries({ queryKey: ['typing-tests'] });
 
       if (onTestCreated) {
-        onTestCreated(data);
+        onTestCreated(data as TypingTest);
       }
     } catch (error: any) {
       console.error('Error creating test:', error);

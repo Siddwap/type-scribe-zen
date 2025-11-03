@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Moon, Sun, Keyboard, Target, Trophy, Settings, User as UserIcon } from 'lucide-react';
+import { Moon, Sun, Keyboard, Target, Trophy, User as UserIcon } from 'lucide-react';
 import { Toaster } from '@/components/ui/toaster';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -11,7 +11,7 @@ import type { User, Session } from '@supabase/supabase-js';
 import Auth from '@/components/Auth';
 import AdminPanel from '@/components/AdminPanel';
 import TypingTest from '@/components/TypingTest';
-import TestSettings from '@/components/TestSettings';
+
 import Results from '@/components/Results';
 import UserProfile from '@/components/UserProfile';
 
@@ -244,14 +244,10 @@ const Index = () => {
         {/* Main Content */}
         <main className="container mx-auto px-4 py-8">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-5' : 'grid-cols-4'} lg:w-auto lg:inline-flex`}>
+            <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-4' : 'grid-cols-3'} lg:w-auto lg:inline-flex`}>
               <TabsTrigger value="test" className="flex items-center gap-2">
                 <Target className="h-4 w-4" />
                 Typing Test
-              </TabsTrigger>
-              <TabsTrigger value="settings" className="flex items-center gap-2">
-                <Settings className="h-4 w-4" />
-                Settings
               </TabsTrigger>
               <TabsTrigger value="results" className="flex items-center gap-2">
                 <Trophy className="h-4 w-4" />
@@ -274,13 +270,6 @@ const Index = () => {
                 settings={testSettings}
                 onComplete={handleTestComplete}
                 currentTest={currentTest}
-              />
-            </TabsContent>
-
-            <TabsContent value="settings">
-              <TestSettings 
-                settings={testSettings}
-                onSettingsChange={setTestSettings}
               />
             </TabsContent>
 
