@@ -108,19 +108,24 @@ const Index = () => {
     try {
       console.log('Checking user role for:', userId);
       const { data, error } = await supabase
-        .from('profiles')
+        .from('user_roles')
         .select('role')
-        .eq('id', userId)
-        .single();
+        .eq('user_id', userId)
+        .eq('role', 'admin')
+        .maybeSingle();
       
       if (!error && data) {
         console.log('User role:', data.role);
-        setIsAdmin(data.role === 'admin');
+        setIsAdmin(true);
       } else if (error) {
         console.error('Error checking user role:', error);
+        setIsAdmin(false);
+      } else {
+        setIsAdmin(false);
       }
     } catch (error) {
       console.error('Error in checkUserRole:', error);
+      setIsAdmin(false);
     }
   };
 
