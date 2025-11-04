@@ -46,7 +46,7 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
     language: 'english' as 'english' | 'hindi',
     difficulty: 'medium' as 'easy' | 'medium' | 'hard',
     category: '',
-    time_limit: 1 // Time in minutes
+    time_limit: 0 // Time in minutes
   });
 
   const [newCategory, setNewCategory] = useState('');
