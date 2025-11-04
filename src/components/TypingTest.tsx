@@ -51,7 +51,7 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
   const [selectedTest, setSelectedTest] = useState<TypingTest | null>(currentTest);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [categorizedTests, setCategorizedTests] = useState<Record<string, TypingTest[]>>({});
-  const [selectedLanguage, setSelectedLanguage] = useState<'english' | 'hindi'>('english');
+  const [selectedLanguage, setSelectedLanguage] = useState<'english' | 'hindi' | null>(null);
   const [showSettings, setShowSettings] = useState(true);
   const [testSettings, setTestSettings] = useState(settings);
   
@@ -61,18 +61,20 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
 
   // Fetch available tests and organize by category
   const { data: availableTests = [] } = useQuery({
-    queryKey: ['typing-tests', settings.language],
+    queryKey: ['typing-tests', selectedLanguage],
     queryFn: async () => {
+      if (!selectedLanguage) return [];
       const { data, error } = await supabase
         .from('typing_tests')
         .select('*')
-        .eq('language', settings.language)
+        .eq('language', selectedLanguage)
         .eq('is_active', true)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
       return data as TypingTest[];
-    }
+    },
+    enabled: !!selectedLanguage
   });
 
   // Organize tests by category
@@ -392,26 +394,33 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
   // Language Selection Step  
   if (!selectedLanguage && !currentTest) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Select Language / भाषा चुनें</CardTitle>
+      <Card className="border-2 shadow-lg">
+        <CardHeader className="text-center pb-2">
+          <CardTitle className="text-3xl font-bold">Choose Your Language</CardTitle>
+          <p className="text-muted-foreground mt-2">Select your preferred typing language</p>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Button 
-              size="lg" 
+        <CardContent className="space-y-4 pt-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card 
+              className="group cursor-pointer hover:shadow-xl hover:scale-105 transition-all duration-300 border-2 hover:border-primary"
               onClick={() => setSelectedLanguage('english')}
-              className="h-24 text-lg"
             >
-              English
-            </Button>
-            <Button 
-              size="lg" 
+              <CardContent className="p-8 text-center">
+                <div className="text-6xl mb-4">🇬🇧</div>
+                <h3 className="text-2xl font-bold mb-2 group-hover:text-primary transition-colors">English</h3>
+                <p className="text-muted-foreground">Type in English language</p>
+              </CardContent>
+            </Card>
+            <Card 
+              className="group cursor-pointer hover:shadow-xl hover:scale-105 transition-all duration-300 border-2 hover:border-primary"
               onClick={() => setSelectedLanguage('hindi')}
-              className="h-24 text-lg"
             >
-              हिंदी (Hindi)
-            </Button>
+              <CardContent className="p-8 text-center">
+                <div className="text-6xl mb-4">🇮🇳</div>
+                <h3 className="text-2xl font-bold mb-2 group-hover:text-primary transition-colors">हिंदी</h3>
+                <p className="text-muted-foreground">हिंदी में टाइप करें</p>
+              </CardContent>
+            </Card>
           </div>
         </CardContent>
       </Card>
@@ -429,48 +438,61 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
   ).filter(Boolean);
 
   // Category Selection Step
-  if (!selectedCategory && !currentTest) {
+  if (selectedLanguage && !selectedCategory && !currentTest) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            Select Category / श्रेणी चुनें
+      <Card className="border-2 shadow-lg">
+        <CardHeader className="text-center pb-2">
+          <CardTitle className="text-3xl font-bold">
+            {selectedLanguage === 'hindi' ? 'श्रेणी चुनें' : 'Choose Category'}
           </CardTitle>
+          <p className="text-muted-foreground mt-2">Select a test category</p>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between mb-4">
-            <Badge variant="outline" className="text-sm">
-              Language: {selectedLanguage === 'hindi' ? 'हिंदी' : 'English'}
-            </Badge>
+        <CardContent className="space-y-6">
+          <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">{selectedLanguage === 'hindi' ? '🇮🇳' : '🇬🇧'}</span>
+              <Badge variant="secondary" className="text-base px-3 py-1">
+                {selectedLanguage === 'hindi' ? 'हिंदी' : 'English'}
+              </Badge>
+            </div>
             <Button 
-              variant="ghost" 
+              variant="outline" 
               size="sm"
               onClick={() => {
-                setSelectedLanguage('english' as 'english' | 'hindi');
+                setSelectedLanguage(null);
                 setSelectedCategory('');
                 setSelectedTest(null);
               }}
             >
-              Change Language
+              ← Change Language
             </Button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {availableCategories.map(category => {
-              const testsCount = languageFilteredTests.filter(t => t.category === category).length;
-              return (
-                <Button 
-                  key={category}
-                  variant="outline"
-                  size="lg"
-                  onClick={() => setSelectedCategory(category)}
-                  className="h-20 flex flex-col items-center justify-center"
-                >
-                  <span className="font-semibold">{category}</span>
-                  <span className="text-xs text-muted-foreground">{testsCount} tests</span>
-                </Button>
-              );
-            })}
-          </div>
+          
+          {availableCategories.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground text-lg">No categories available for this language</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {availableCategories.map(category => {
+                const testsCount = languageFilteredTests.filter(t => t.category === category).length;
+                return (
+                  <Card 
+                    key={category}
+                    className="group cursor-pointer hover:shadow-lg hover:scale-105 transition-all duration-300 border-2 hover:border-primary"
+                    onClick={() => setSelectedCategory(category)}
+                  >
+                    <CardContent className="p-6 text-center">
+                      <h3 className="font-bold text-xl mb-2 group-hover:text-primary transition-colors">{category}</h3>
+                      <Badge variant="outline" className="text-sm">
+                        {testsCount} {testsCount === 1 ? 'test' : 'tests'}
+                      </Badge>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
     );
@@ -481,59 +503,73 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     test => test.category === selectedCategory
   );
 
-  if (!selectedTest) {
+  if (selectedLanguage && selectedCategory && !selectedTest) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Select Test / टेस्ट चुनें</CardTitle>
+      <Card className="border-2 shadow-lg">
+        <CardHeader className="text-center pb-2">
+          <CardTitle className="text-3xl font-bold">
+            {selectedLanguage === 'hindi' ? 'टेस्ट चुनें' : 'Choose Your Test'}
+          </CardTitle>
+          <p className="text-muted-foreground mt-2">Select a typing test to begin</p>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex gap-2">
-              <Badge variant="outline">
+        <CardContent className="space-y-6">
+          <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+            <div className="flex gap-2 items-center flex-wrap">
+              <span className="text-2xl">{selectedLanguage === 'hindi' ? '🇮🇳' : '🇬🇧'}</span>
+              <Badge variant="secondary" className="text-base px-3 py-1">
                 {selectedLanguage === 'hindi' ? 'हिंदी' : 'English'}
               </Badge>
-              <Badge variant="outline">{selectedCategory}</Badge>
+              <span className="text-muted-foreground">→</span>
+              <Badge variant="secondary" className="text-base px-3 py-1">{selectedCategory}</Badge>
             </div>
             <Button 
-              variant="ghost" 
+              variant="outline" 
               size="sm"
               onClick={() => {
                 setSelectedCategory('');
                 setSelectedTest(null);
               }}
             >
-              Change Category
+              ← Change Category
             </Button>
           </div>
           
-          <div className="space-y-3">
-            {categoryTests.map((test) => (
-              <Card 
-                key={test.id} 
-                className="p-4 cursor-pointer hover:border-primary transition-colors"
-                onClick={() => setSelectedTest(test)}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-lg mb-2">{test.title}</h3>
-                    <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
-                      {test.content.substring(0, 150)}...
-                    </p>
-                    <div className="flex gap-2 flex-wrap">
-                      <Badge variant="secondary">{test.difficulty}</Badge>
-                      <Badge variant="outline">
-                        {Math.floor(test.time_limit / 60)} min {test.time_limit % 60} sec
-                      </Badge>
-                      <Badge variant="outline">
-                        {test.content.split(' ').length} words
-                      </Badge>
+          {categoryTests.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground text-lg">No tests available in this category</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {categoryTests.map((test) => (
+                <Card 
+                  key={test.id} 
+                  className="group cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all duration-300 border-2 hover:border-primary"
+                  onClick={() => setSelectedTest(test)}
+                >
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h3 className="font-bold text-xl mb-3 group-hover:text-primary transition-colors">{test.title}</h3>
+                        <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
+                          {test.content.substring(0, 180)}...
+                        </p>
+                        <div className="flex gap-2 flex-wrap">
+                          <Badge variant="secondary" className="capitalize">{test.difficulty}</Badge>
+                          <Badge variant="outline" className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {Math.floor(test.time_limit / 60)}:{(test.time_limit % 60).toString().padStart(2, '0')}
+                          </Badge>
+                          <Badge variant="outline">
+                            {test.content.split(' ').length} words
+                          </Badge>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     );
@@ -543,96 +579,113 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     <div className="space-y-6">
       {/* Settings Panel - Show before test starts */}
       {showSettings && !isActive && !isFinished && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Test Settings</CardTitle>
+        <Card className="border-2 shadow-lg">
+          <CardHeader className="text-center pb-2">
+            <CardTitle className="text-2xl font-bold">Configure Your Test</CardTitle>
+            <p className="text-muted-foreground mt-2">Customize your typing experience</p>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex gap-2">
-                <Badge variant="outline">
+            <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+              <div className="flex gap-2 items-center flex-wrap">
+                <span className="text-2xl">{selectedLanguage === 'hindi' ? '🇮🇳' : '🇬🇧'}</span>
+                <Badge variant="secondary" className="text-sm px-2 py-1">
                   {selectedLanguage === 'hindi' ? 'हिंदी' : 'English'}
                 </Badge>
-                <Badge variant="outline">{selectedCategory}</Badge>
-                <Badge variant="outline">{selectedTest.title}</Badge>
+                <span className="text-muted-foreground">→</span>
+                <Badge variant="secondary" className="text-sm px-2 py-1">{selectedCategory}</Badge>
+                <span className="text-muted-foreground">→</span>
+                <Badge variant="secondary" className="text-sm px-2 py-1">{selectedTest.title}</Badge>
               </div>
               <Button 
-                variant="ghost" 
+                variant="outline" 
                 size="sm"
                 onClick={() => {
                   setSelectedTest(null);
                 }}
               >
-                Change Test
+                ← Change
               </Button>
             </div>
 
             {/* Display Settings */}
-            <div className="space-y-4">
-              <h3 className="font-semibold flex items-center gap-2">
-                <Settings className="h-4 w-4" />
-                Display Settings
-              </h3>
-              <div className="flex items-center justify-between">
-                <Label htmlFor="highlight-text" className="text-sm font-medium">
-                  Highlight current text
-                </Label>
-                <Switch
-                  id="highlight-text"
-                  checked={testSettings.highlightText}
-                  onCheckedChange={(checked) => 
-                    setTestSettings({...testSettings, highlightText: checked})
-                  }
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <Label htmlFor="show-errors" className="text-sm font-medium">
-                  Show typing errors
-                </Label>
-                <Switch
-                  id="show-errors"
-                  checked={testSettings.showErrors}
-                  onCheckedChange={(checked) => 
-                    setTestSettings({...testSettings, showErrors: checked})
-                  }
-                />
-              </div>
-            </div>
+            <Card className="border-primary/20">
+              <CardContent className="p-4 space-y-4">
+                <h3 className="font-bold text-lg flex items-center gap-2 text-primary">
+                  <Settings className="h-5 w-5" />
+                  Display Settings
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-3 bg-background rounded-lg border">
+                    <div>
+                      <Label htmlFor="highlight-text" className="font-medium cursor-pointer">
+                        Highlight Current Text
+                      </Label>
+                      <p className="text-xs text-muted-foreground mt-1">Highlight the word you're typing</p>
+                    </div>
+                    <Switch
+                      id="highlight-text"
+                      checked={testSettings.highlightText}
+                      onCheckedChange={(checked) => 
+                        setTestSettings({...testSettings, highlightText: checked})
+                      }
+                    />
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-background rounded-lg border">
+                    <div>
+                      <Label htmlFor="show-errors" className="font-medium cursor-pointer">
+                        Show Typing Errors
+                      </Label>
+                      <p className="text-xs text-muted-foreground mt-1">Display mistakes in real-time</p>
+                    </div>
+                    <Switch
+                      id="show-errors"
+                      checked={testSettings.showErrors}
+                      onCheckedChange={(checked) => 
+                        setTestSettings({...testSettings, showErrors: checked})
+                      }
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Input Settings */}
-            <div className="space-y-4">
-              <h3 className="font-semibold flex items-center gap-2">
-                <Keyboard className="h-4 w-4" />
-                Input Settings
-              </h3>
-              <div className="space-y-2">
-                <Label htmlFor="backspace-mode" className="text-sm font-medium">
-                  Backspace behavior
-                </Label>
-                <Select
-                  value={testSettings.backspaceMode}
-                  onValueChange={(value: 'full' | 'word' | 'disabled') => 
-                    setTestSettings({...testSettings, backspaceMode: value})
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select backspace mode" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="full">Full correction allowed</SelectItem>
-                    <SelectItem value="word">Word-level correction</SelectItem>
-                    <SelectItem value="disabled">Backspace disabled</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+            <Card className="border-primary/20">
+              <CardContent className="p-4 space-y-4">
+                <h3 className="font-bold text-lg flex items-center gap-2 text-primary">
+                  <Keyboard className="h-5 w-5" />
+                  Input Settings
+                </h3>
+                <div className="space-y-2">
+                  <Label htmlFor="backspace-mode" className="font-medium">
+                    Backspace Behavior
+                  </Label>
+                  <Select
+                    value={testSettings.backspaceMode}
+                    onValueChange={(value: 'full' | 'word' | 'disabled') => 
+                      setTestSettings({...testSettings, backspaceMode: value})
+                    }
+                  >
+                    <SelectTrigger className="border-2">
+                      <SelectValue placeholder="Select backspace mode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="full">✓ Full correction allowed</SelectItem>
+                      <SelectItem value="word">⚡ Word-level correction</SelectItem>
+                      <SelectItem value="disabled">🚫 Backspace disabled</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Choose how backspace works during the test</p>
+                </div>
+              </CardContent>
+            </Card>
 
             <Button 
               onClick={startTest} 
               size="lg" 
-              className="w-full"
+              className="w-full text-lg h-14 shadow-lg hover:shadow-xl transition-all"
             >
-              Start Test
+              🚀 Start Test Now
             </Button>
           </CardContent>
         </Card>
