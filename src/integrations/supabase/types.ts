@@ -42,44 +42,59 @@ export type Database = {
         Row: {
           accuracy: number
           completed_at: string | null
-          correct_chars: number
-          correct_words: number
+          correct_keystrokes: number
+          correct_words_count: number
           created_at: string | null
+          errors: number | null
+          gross_wpm: number | null
           id: string
+          incorrect_words: number
           test_id: string
           time_taken: number
+          total_keystrokes: number | null
+          total_words: number | null
+          typed_words: number | null
           user_id: string
           wpm: number
-          wrong_chars: number
-          wrong_words: number
+          wrong_keystrokes: number
         }
         Insert: {
           accuracy: number
           completed_at?: string | null
-          correct_chars?: number
-          correct_words?: number
+          correct_keystrokes?: number
+          correct_words_count?: number
           created_at?: string | null
+          errors?: number | null
+          gross_wpm?: number | null
           id?: string
+          incorrect_words?: number
           test_id: string
           time_taken: number
+          total_keystrokes?: number | null
+          total_words?: number | null
+          typed_words?: number | null
           user_id: string
           wpm: number
-          wrong_chars?: number
-          wrong_words?: number
+          wrong_keystrokes?: number
         }
         Update: {
           accuracy?: number
           completed_at?: string | null
-          correct_chars?: number
-          correct_words?: number
+          correct_keystrokes?: number
+          correct_words_count?: number
           created_at?: string | null
+          errors?: number | null
+          gross_wpm?: number | null
           id?: string
+          incorrect_words?: number
           test_id?: string
           time_taken?: number
+          total_keystrokes?: number | null
+          total_words?: number | null
+          typed_words?: number | null
           user_id?: string
           wpm?: number
-          wrong_chars?: number
-          wrong_words?: number
+          wrong_keystrokes?: number
         }
         Relationships: [
           {

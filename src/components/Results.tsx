@@ -58,7 +58,7 @@ interface ResultsProps {
 const Results = ({ results }: ResultsProps) => {
   const [showAllResults, setShowAllResults] = React.useState(false);
 
-  // Fetch user's test history
+  // Fetch user's test history - always fetch when component mounts
   const { data: testHistory = [], isLoading, refetch } = useQuery({
     queryKey: ['test-history'],
     queryFn: async () => {
@@ -75,10 +75,12 @@ const Results = ({ results }: ResultsProps) => {
         .order('completed_at', { ascending: false })
         .limit(20);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching test history:', error);
+        return [];
+      }
       return data || [];
-    },
-    enabled: showAllResults
+    }
   });
 
   const handleShowAllResults = () => {
@@ -245,21 +247,21 @@ const Results = ({ results }: ResultsProps) => {
                                     </div>
                                   </div>
                                   
-                                  <div className="flex items-center gap-2">
-                                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                                    <div>
-                                      <div className="font-bold">{test.correct_chars}</div>
-                                      <div className="text-xs text-gray-500">Correct</div>
-                                    </div>
-                                  </div>
-                                  
-                                  <div className="flex items-center gap-2">
-                                    <XCircle className="h-4 w-4 text-red-500" />
-                                    <div>
-                                      <div className="font-bold">{test.wrong_chars}</div>
-                                      <div className="text-xs text-gray-500">Errors</div>
-                                    </div>
-                                  </div>
+                                   <div className="flex items-center gap-2">
+                                     <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                                     <div>
+                                       <div className="font-bold">{test.correct_keystrokes || 0}</div>
+                                       <div className="text-xs text-gray-500">Correct</div>
+                                     </div>
+                                   </div>
+                                   
+                                   <div className="flex items-center gap-2">
+                                     <XCircle className="h-4 w-4 text-red-500" />
+                                     <div>
+                                       <div className="font-bold">{test.wrong_keystrokes || test.errors || 0}</div>
+                                       <div className="text-xs text-gray-500">Errors</div>
+                                     </div>
+                                   </div>
                                 </div>
                               </div>
 
@@ -287,14 +289,14 @@ const Results = ({ results }: ResultsProps) => {
                                 <Progress value={test.accuracy} className="h-2 flex-1" />
                                 <span className="text-xs font-medium w-12 text-right">{test.accuracy.toFixed(1)}%</span>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-gray-500 w-20">Completion</span>
-                                <Progress 
-                                  value={(test.correct_chars + test.wrong_chars) / (test.correct_chars + test.wrong_chars) * 100} 
-                                  className="h-2 flex-1" 
-                                />
-                                <span className="text-xs font-medium w-12 text-right">100%</span>
-                              </div>
+                               <div className="flex items-center gap-2">
+                                 <span className="text-xs text-gray-500 w-20">Completion</span>
+                                 <Progress 
+                                   value={100} 
+                                   className="h-2 flex-1" 
+                                 />
+                                 <span className="text-xs font-medium w-12 text-right">100%</span>
+                               </div>
                             </div>
                           </CardContent>
                         </Card>

@@ -6,10 +6,11 @@ import { Progress } from '@/components/ui/progress';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Clock, Target, Zap, XCircle, RotateCcw, Settings, Keyboard } from 'lucide-react';
+import { Clock, Target, Zap, XCircle, RotateCcw, Settings, Keyboard, FileText } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
+import CustomTextTest from './CustomTextTest';
 
 interface TypingTest {
   id: string;
@@ -54,6 +55,8 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
   const [selectedLanguage, setSelectedLanguage] = useState<'english' | 'hindi' | null>(null);
   const [showSettings, setShowSettings] = useState(true);
   const [testSettings, setTestSettings] = useState(settings);
+  const [showCustomTextOption, setShowCustomTextOption] = useState(false);
+  const [customTextMode, setCustomTextMode] = useState(false);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const displayRef = useRef<HTMLDivElement>(null);
@@ -277,12 +280,16 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     const correctWords = typedWords.filter((word, index) => word === words[index]).length;
     const incorrectWords = typedWords.length - correctWords;
     
-    const accuracy = typedWords.length > 0 ? (correctWords / typedWords.length) * 100 : 0;
+    // Calculate accuracy based on actual keystrokes (character-level accuracy)
+    const accuracy = typedKeystrokes > 0 ? (correctKeystrokes / typedKeystrokes) * 100 : 0;
     
     const wpm = Math.round((correctKeystrokes / 5) / (timeTaken / 60));
     const grossWpm = Math.round((typedKeystrokes / 5) / (timeTaken / 60));
     
     const keystrokeAccuracy = typedKeystrokes > 0 ? (correctKeystrokes / typedKeystrokes) * 100 : 0;
+    
+    // Calculate wrong keystrokes
+    const wrongKeystrokes = typedKeystrokes - correctKeystrokes;
 
     const results = {
       wpm,
@@ -308,8 +315,8 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user && selectedTest) {
-        await supabase.from('test_results').insert([{
+      if (user && selectedTest && selectedTest.id !== 'custom-text') {
+        const { error: insertError } = await supabase.from('test_results').insert([{
           user_id: user.id,
           test_id: selectedTest.id,
           wpm: results.wpm,
@@ -317,13 +324,33 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
           accuracy: results.accuracy,
           total_words: results.totalWords,
           typed_words: results.typedWords,
-          correct_words: results.correctWords,
+          correct_words_count: results.correctWords,
           incorrect_words: results.incorrectWords,
           total_keystrokes: results.totalKeystrokes,
           correct_keystrokes: results.correctKeystrokes,
+          wrong_keystrokes: wrongKeystrokes,
           errors: results.errors,
           time_taken: results.timeTaken
         }]);
+        
+        if (insertError) {
+          console.error('Error saving results:', insertError);
+          toast({
+            title: "Error saving results",
+            description: "Your results couldn't be saved. Please try again.",
+            variant: "destructive"
+          });
+        } else {
+          toast({
+            title: "Results saved!",
+            description: "Your test results have been saved successfully.",
+          });
+        }
+      } else if (selectedTest?.id === 'custom-text') {
+        toast({
+          title: "Custom text completed!",
+          description: "Custom text results are not saved to history.",
+        });
       }
     } catch (error) {
       console.error('Error saving results:', error);
@@ -382,15 +409,62 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
   const wpm = startTime && correctKeystrokes > 0 ? 
     Math.round(((correctKeystrokes / 5) / ((Date.now() - startTime.getTime()) / 1000 / 60))) : 0;
 
+  // Custom Text Mode
+  if (customTextMode) {
+    return (
+      <CustomTextTest 
+        onStartTest={(customTest) => {
+          const customTypingTest: TypingTest = {
+            id: 'custom-text',
+            title: 'Custom Text Practice',
+            content: customTest.content,
+            language: 'english',
+            difficulty: 'medium',
+            category: 'Custom',
+            time_limit: customTest.time_limit
+          };
+          setSelectedTest(customTypingTest);
+          setCustomTextMode(false);
+        }}
+        onBack={() => setCustomTextMode(false)}
+      />
+    );
+  }
+
   // Language Selection Step  
   if (!selectedLanguage && !currentTest) {
     return (
       <Card className="border-2 shadow-lg">
         <CardHeader className="text-center pb-2">
           <CardTitle className="text-3xl font-bold">Choose Your Language</CardTitle>
-          <p className="text-muted-foreground mt-2">Select your preferred typing language</p>
+          <p className="text-muted-foreground mt-2">Select your preferred typing language or use custom text</p>
         </CardHeader>
         <CardContent className="space-y-4 pt-6">
+          {/* Custom Text Option */}
+          <Card 
+            className="group cursor-pointer hover:shadow-xl hover:scale-105 transition-all duration-300 border-2 hover:border-primary mb-4"
+            onClick={() => setCustomTextMode(true)}
+          >
+            <CardContent className="p-6 text-center">
+              <div className="flex items-center justify-center gap-3">
+                <FileText className="h-8 w-8 text-primary" />
+                <div>
+                  <h3 className="text-xl font-bold group-hover:text-primary transition-colors">Custom Text</h3>
+                  <p className="text-sm text-muted-foreground">Practice with your own text</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">Or choose a language</span>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card 
               className="group cursor-pointer hover:shadow-xl hover:scale-105 transition-all duration-300 border-2 hover:border-primary"
