@@ -127,60 +127,182 @@ const Results = ({ results }: ResultsProps) => {
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <div className="text-center py-8">Loading test history...</div>
+              <div className="text-center py-8">
+                <div className="animate-pulse">Loading test history...</div>
+              </div>
             ) : testHistory.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">No test history found</div>
+              <div className="text-center py-12">
+                <History className="h-16 w-16 mx-auto mb-4 text-gray-300 dark:text-gray-700" />
+                <h3 className="text-lg font-semibold mb-2">No Test History</h3>
+                <p className="text-gray-500 dark:text-gray-400">
+                  Complete some tests to see your history here
+                </p>
+              </div>
             ) : (
-              <ScrollArea className="h-96">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Test</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>WPM</TableHead>
-                      <TableHead>Accuracy</TableHead>
-                      <TableHead>Time</TableHead>
-                      <TableHead>Keystrokes</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {testHistory.map((test: any) => (
-                      <TableRow key={test.id}>
-                        <TableCell>
-                          <div>
-                            <div className="font-medium">{test.typing_tests?.title || 'Unknown Test'}</div>
-                            <div className="flex gap-1 mt-1">
-                              <Badge variant="outline" className="text-xs">
-                                {test.typing_tests?.language === 'hindi' ? 'हिंदी' : 'English'}
-                              </Badge>
-                              <Badge variant="outline" className="text-xs">
-                                {test.typing_tests?.difficulty}
-                              </Badge>
+              <div className="space-y-4">
+                {/* Summary Stats */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                  <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 border-blue-200 dark:border-blue-800">
+                    <CardContent className="p-4 text-center">
+                      <Trophy className="h-6 w-6 mx-auto mb-2 text-blue-600 dark:text-blue-400" />
+                      <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">
+                        {Math.max(...testHistory.map((t: any) => t.wpm))}
+                      </div>
+                      <div className="text-xs text-blue-600 dark:text-blue-400">Best WPM</div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900 border-green-200 dark:border-green-800">
+                    <CardContent className="p-4 text-center">
+                      <Target className="h-6 w-6 mx-auto mb-2 text-green-600 dark:text-green-400" />
+                      <div className="text-2xl font-bold text-green-700 dark:text-green-300">
+                        {(testHistory.reduce((sum: number, t: any) => sum + t.accuracy, 0) / testHistory.length).toFixed(1)}%
+                      </div>
+                      <div className="text-xs text-green-600 dark:text-green-400">Avg Accuracy</div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900 border-purple-200 dark:border-purple-800">
+                    <CardContent className="p-4 text-center">
+                      <BarChart3 className="h-6 w-6 mx-auto mb-2 text-purple-600 dark:text-purple-400" />
+                      <div className="text-2xl font-bold text-purple-700 dark:text-purple-300">
+                        {testHistory.length}
+                      </div>
+                      <div className="text-xs text-purple-600 dark:text-purple-400">Total Tests</div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-950 dark:to-orange-900 border-orange-200 dark:border-orange-800">
+                    <CardContent className="p-4 text-center">
+                      <Clock className="h-6 w-6 mx-auto mb-2 text-orange-600 dark:text-orange-400" />
+                      <div className="text-2xl font-bold text-orange-700 dark:text-orange-300">
+                        {Math.round(testHistory.reduce((sum: number, t: any) => sum + t.time_taken, 0) / 60)}m
+                      </div>
+                      <div className="text-xs text-orange-600 dark:text-orange-400">Practice Time</div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Test History Cards */}
+                <ScrollArea className="h-[600px]">
+                  <div className="space-y-3 pr-4">
+                    {testHistory.map((test: any, index: number) => {
+                      const isTopPerformer = test.wpm >= Math.max(...testHistory.map((t: any) => t.wpm)) * 0.9;
+                      return (
+                        <Card key={test.id} className={`transition-all hover:shadow-lg ${isTopPerformer ? 'border-yellow-400 dark:border-yellow-600' : ''}`}>
+                          <CardContent className="p-5">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 text-primary font-bold text-sm">
+                                    #{index + 1}
+                                  </div>
+                                  <h4 className="font-semibold text-lg">{test.typing_tests?.title || 'Unknown Test'}</h4>
+                                  {isTopPerformer && <Trophy className="h-4 w-4 text-yellow-500" />}
+                                </div>
+                                
+                                <div className="flex gap-2 mb-3">
+                                  <Badge variant="outline" className="text-xs">
+                                    {test.typing_tests?.language === 'hindi' ? '🇮🇳 हिंदी' : '🇬🇧 English'}
+                                  </Badge>
+                                  <Badge variant="outline" className="text-xs capitalize">
+                                    {test.typing_tests?.difficulty}
+                                  </Badge>
+                                  {test.typing_tests?.category && (
+                                    <Badge variant="secondary" className="text-xs">
+                                      {test.typing_tests?.category}
+                                    </Badge>
+                                  )}
+                                </div>
+
+                                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
+                                  <div className="flex items-center gap-2">
+                                    <Zap className="h-4 w-4 text-blue-500" />
+                                    <div>
+                                      <div className="font-bold text-lg">{test.wpm}</div>
+                                      <div className="text-xs text-gray-500">WPM</div>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-2">
+                                    <Target className="h-4 w-4 text-green-500" />
+                                    <div>
+                                      <div className="font-bold text-lg">{test.accuracy.toFixed(1)}%</div>
+                                      <div className="text-xs text-gray-500">Accuracy</div>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-2">
+                                    <Clock className="h-4 w-4 text-orange-500" />
+                                    <div>
+                                      <div className="font-bold">
+                                        {test.time_taken >= 60 
+                                          ? `${Math.floor(test.time_taken / 60)}:${(test.time_taken % 60).toString().padStart(2, '0')}`
+                                          : `${test.time_taken}s`
+                                        }
+                                      </div>
+                                      <div className="text-xs text-gray-500">Time</div>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-2">
+                                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                                    <div>
+                                      <div className="font-bold">{test.correct_chars}</div>
+                                      <div className="text-xs text-gray-500">Correct</div>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-2">
+                                    <XCircle className="h-4 w-4 text-red-500" />
+                                    <div>
+                                      <div className="font-bold">{test.wrong_chars}</div>
+                                      <div className="text-xs text-gray-500">Errors</div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="text-right text-sm text-gray-500">
+                                <div className="font-medium">
+                                  {new Date(test.completed_at).toLocaleDateString('en-US', { 
+                                    month: 'short', 
+                                    day: 'numeric',
+                                    year: 'numeric'
+                                  })}
+                                </div>
+                                <div className="text-xs">
+                                  {new Date(test.completed_at).toLocaleTimeString('en-US', { 
+                                    hour: '2-digit', 
+                                    minute: '2-digit'
+                                  })}
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {new Date(test.completed_at).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell className="font-medium">{test.wpm}</TableCell>
-                        <TableCell>{test.accuracy.toFixed(1)}%</TableCell>
-                        <TableCell>
-                          {test.time_taken >= 60 
-                            ? `${Math.floor(test.time_taken / 60)}:${(test.time_taken % 60).toString().padStart(2, '0')}`
-                            : `${test.time_taken}s`
-                          }
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            <div>Total: {test.total_keystrokes}</div>
-                            <div className="text-green-600">Correct: {test.correct_keystrokes}</div>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </ScrollArea>
+                            
+                            {/* Progress bars */}
+                            <div className="mt-4 space-y-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-500 w-20">Accuracy</span>
+                                <Progress value={test.accuracy} className="h-2 flex-1" />
+                                <span className="text-xs font-medium w-12 text-right">{test.accuracy.toFixed(1)}%</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-500 w-20">Completion</span>
+                                <Progress 
+                                  value={(test.correct_chars + test.wrong_chars) / (test.correct_chars + test.wrong_chars) * 100} 
+                                  className="h-2 flex-1" 
+                                />
+                                <span className="text-xs font-medium w-12 text-right">100%</span>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+              </div>
             )}
           </CardContent>
         </Card>

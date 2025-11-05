@@ -53,6 +53,15 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
   const [editCategoryName, setEditCategoryName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingTest, setEditingTest] = useState<TypingTest | null>(null);
+  const [editForm, setEditForm] = useState({
+    title: '',
+    content: '',
+    language: 'english' as 'english' | 'hindi',
+    difficulty: 'medium' as 'easy' | 'medium' | 'hard',
+    category: '',
+    time_limit: 0
+  });
 
   const queryClient = useQueryClient();
 
@@ -280,6 +289,73 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
     }
   };
 
+  const handleEditTest = (test: TypingTest) => {
+    setEditingTest(test);
+    setEditForm({
+      title: test.title,
+      content: test.content,
+      language: test.language,
+      difficulty: test.difficulty,
+      category: test.category,
+      time_limit: Math.floor(test.time_limit / 60) // Convert seconds to minutes
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingTest(null);
+    setEditForm({
+      title: '',
+      content: '',
+      language: 'english',
+      difficulty: 'medium',
+      category: '',
+      time_limit: 0
+    });
+  };
+
+  const handleUpdateTest = async () => {
+    if (!editingTest) return;
+    setIsSubmitting(true);
+
+    try {
+      if (!editForm.title || !editForm.content || !editForm.category) {
+        throw new Error('Please fill in all required fields');
+      }
+
+      const { error } = await supabase
+        .from('typing_tests')
+        .update({
+          title: editForm.title,
+          content: editForm.content.trim(),
+          language: editForm.language,
+          difficulty: editForm.difficulty,
+          category: editForm.category.trim(),
+          time_limit: editForm.time_limit * 60 // Convert minutes to seconds
+        })
+        .eq('id', editingTest.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Test updated successfully!",
+      });
+
+      handleCancelEdit();
+      refetchTests();
+      queryClient.invalidateQueries({ queryKey: ['typing-tests'] });
+    } catch (error: any) {
+      console.error('Error updating test:', error);
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const formatTime = (seconds: number) => {
     if (seconds >= 60) {
       const minutes = Math.floor(seconds / 60);
@@ -396,63 +472,168 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
                   Total Tests: {tests.length} | Active: {tests.filter(t => t.is_active).length}
                 </div>
                 
-                <div className="space-y-4 max-h-96 overflow-y-auto">
-                  {tests.map((test) => (
-                    <Card key={test.id} className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <h3 className="font-semibold">{test.title}</h3>
-                            <Badge variant="outline">{test.language}</Badge>
-                            <Badge variant="outline">{test.difficulty}</Badge>
-                            <Badge variant="outline">{test.category}</Badge>
-                            <Badge variant={test.is_active ? "default" : "secondary"}>
-                              {test.is_active ? "Active" : "Inactive"}
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                            {test.content.substring(0, 100)}...
-                          </p>
-                          <div className="text-xs text-gray-500">
-                            Time: {formatTime(test.time_limit)} | Words: {test.content.split(' ').length}
-                          </div>
+                {editingTest ? (
+                  <Card className="p-6 border-2 border-primary">
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold">Edit Test</h3>
+                        <Button variant="ghost" size="sm" onClick={handleCancelEdit}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-title">Test Title *</Label>
+                          <Input
+                            id="edit-title"
+                            value={editForm.title}
+                            onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                            placeholder="Enter test title"
+                          />
                         </div>
-                        
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant={test.is_active ? "secondary" : "default"}
-                            onClick={() => handleToggleActive(test.id, test.is_active)}
-                          >
-                            {test.is_active ? "Deactivate" : "Activate"}
-                          </Button>
-                          
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button size="sm" variant="destructive">
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Test</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to delete "{test.title}"? This action cannot be undone.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDeleteTest(test.id)}>
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-category">Category *</Label>
+                          <Input
+                            id="edit-category"
+                            value={editForm.category}
+                            onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+                            placeholder="Enter category name"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-language">Language</Label>
+                          <Select value={editForm.language} onValueChange={(value: 'english' | 'hindi') => setEditForm({ ...editForm, language: value })}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="english">English</SelectItem>
+                              <SelectItem value="hindi">Hindi</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-difficulty">Difficulty</Label>
+                          <Select value={editForm.difficulty} onValueChange={(value: 'easy' | 'medium' | 'hard') => setEditForm({ ...editForm, difficulty: value })}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="easy">Easy</SelectItem>
+                              <SelectItem value="medium">Medium</SelectItem>
+                              <SelectItem value="hard">Hard</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-time-limit">Time Limit (minutes) *</Label>
+                          <Input
+                            id="edit-time-limit"
+                            type="number"
+                            min="1"
+                            max="60"
+                            value={editForm.time_limit}
+                            onChange={(e) => setEditForm({ ...editForm, time_limit: parseInt(e.target.value) || 1 })}
+                          />
                         </div>
                       </div>
-                    </Card>
-                  ))}
-                </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-content">Test Content *</Label>
+                        <Textarea
+                          id="edit-content"
+                          value={editForm.content}
+                          onChange={(e) => setEditForm({ ...editForm, content: e.target.value })}
+                          placeholder="Enter the text for typing test"
+                          className="min-h-[200px]"
+                        />
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Words: {editForm.content.split(' ').filter(word => word.length > 0).length}
+                        </p>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button onClick={handleUpdateTest} disabled={isSubmitting} className="flex-1">
+                          {isSubmitting ? 'Updating...' : 'Update Test'}
+                        </Button>
+                        <Button variant="outline" onClick={handleCancelEdit} className="flex-1">
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                ) : (
+                  <div className="space-y-4 max-h-96 overflow-y-auto">
+                    {tests.map((test) => (
+                      <Card key={test.id} className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <h3 className="font-semibold">{test.title}</h3>
+                              <Badge variant="outline">{test.language}</Badge>
+                              <Badge variant="outline">{test.difficulty}</Badge>
+                              <Badge variant="outline">{test.category}</Badge>
+                              <Badge variant={test.is_active ? "default" : "secondary"}>
+                                {test.is_active ? "Active" : "Inactive"}
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                              {test.content.substring(0, 100)}...
+                            </p>
+                            <div className="text-xs text-gray-500">
+                              Time: {formatTime(test.time_limit)} | Words: {test.content.split(' ').length}
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleEditTest(test)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            
+                            <Button
+                              size="sm"
+                              variant={test.is_active ? "secondary" : "default"}
+                              onClick={() => handleToggleActive(test.id, test.is_active)}
+                            >
+                              {test.is_active ? "Deactivate" : "Activate"}
+                            </Button>
+                            
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button size="sm" variant="destructive">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Test</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete "{test.title}"? This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDeleteTest(test.id)}>
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                )}
               </div>
             </TabsContent>
 
