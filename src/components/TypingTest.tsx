@@ -283,8 +283,8 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     // Calculate accuracy based on actual keystrokes (character-level accuracy)
     const accuracy = typedKeystrokes > 0 ? (correctWords / typedWords.length) * 100 : 0;
     
-    const wpm = Math.round((correctKeystrokes / 5) / (timeTaken / 60));
-    const grossWpm = Math.round((typedKeystrokes / 5) / (timeTaken / 60));
+    const wpm = Math.round((correctWords) / (timeTaken / 60));
+    const grossWpm = Math.round((typedWords.length) / (timeTaken / 60));
     
     const keystrokeAccuracy = typedKeystrokes > 0 ? (correctKeystrokes / typedKeystrokes) * 100 : 0;
     
