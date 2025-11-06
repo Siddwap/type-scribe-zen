@@ -57,6 +57,8 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
   const [testSettings, setTestSettings] = useState(settings);
   const [showCustomTextOption, setShowCustomTextOption] = useState(false);
   const [customTextMode, setCustomTextMode] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [currentTestId, setCurrentTestId] = useState<string | null>(null);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const displayRef = useRef<HTMLDivElement>(null);
@@ -313,6 +315,9 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
       wrongWordIndices: Array.from(wrongWords)
     };
 
+    // Check if qualifies for leaderboard (85%+ accuracy AND 10min+ OR 400+ words)
+    const qualifiesForLeaderboard = keystrokeAccuracy >= 85 && (timeTaken >= 600 || typedWords.length >= 400);
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user && selectedTest && selectedTest.id !== 'custom-text') {
@@ -343,8 +348,15 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
         } else {
           toast({
             title: "Results saved!",
-            description: "Your test results have been saved successfully.",
+            description: qualifiesForLeaderboard 
+              ? "🎉 You qualified for the leaderboard!" 
+              : "Test results saved successfully!",
           });
+          
+          if (qualifiesForLeaderboard) {
+            setCurrentTestId(selectedTest.id);
+            setShowLeaderboard(true);
+          }
         }
       } else if (selectedTest?.id === 'custom-text') {
         toast({

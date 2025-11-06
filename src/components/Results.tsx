@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Trophy, 
   Target, 
@@ -15,7 +16,9 @@ import {
   BarChart3,
   Download,
   Share2,
-  History
+  History,
+  Keyboard,
+  FileText
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -28,6 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Leaderboard } from './Leaderboard';
 
 interface TestResults {
   wpm: number;
@@ -57,6 +61,14 @@ interface ResultsProps {
 
 const Results = ({ results }: ResultsProps) => {
   const [showAllResults, setShowAllResults] = React.useState(false);
+  
+  const { data: { user } = {} } = useQuery({
+    queryKey: ['user'],
+    queryFn: async () => {
+      const { data } = await supabase.auth.getUser();
+      return data;
+    },
+  });
 
   // Fetch user's test history - always fetch when component mounts
   const { data: testHistory = [], isLoading, refetch } = useQuery({
@@ -111,8 +123,20 @@ const Results = ({ results }: ResultsProps) => {
   }
 
   if (showAllResults) {
-    return (
-      <div className="space-y-6">
+  return (
+    <Tabs defaultValue="history" className="space-y-6">
+      <TabsList className="grid w-full grid-cols-2">
+        <TabsTrigger value="history">
+          <History className="w-4 h-4 mr-2" />
+          My History
+        </TabsTrigger>
+        <TabsTrigger value="leaderboard">
+          <Trophy className="w-4 h-4 mr-2" />
+          Leaderboard
+        </TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="history" className="space-y-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2">
@@ -217,14 +241,22 @@ const Results = ({ results }: ResultsProps) => {
                                   )}
                                 </div>
 
-                                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
-                                  <div className="flex items-center gap-2">
-                                    <Zap className="h-4 w-4 text-blue-500" />
-                                    <div>
-                                      <div className="font-bold text-lg">{test.wpm}</div>
-                                      <div className="text-xs text-gray-500">WPM</div>
-                                    </div>
-                                  </div>
+                                 <div className="grid grid-cols-2 md:grid-cols-6 gap-3 text-sm">
+                                   <div className="flex items-center gap-2">
+                                     <Zap className="h-4 w-4 text-blue-500" />
+                                     <div>
+                                       <div className="font-bold text-lg">{Math.round(test.wpm)}</div>
+                                       <div className="text-xs text-gray-500">Net WPM</div>
+                                     </div>
+                                   </div>
+                                   
+                                   <div className="flex items-center gap-2">
+                                     <BarChart3 className="h-4 w-4 text-purple-500" />
+                                     <div>
+                                       <div className="font-bold text-lg">{Math.round(test.gross_wpm || 0)}</div>
+                                       <div className="text-xs text-gray-500">Gross WPM</div>
+                                     </div>
+                                   </div>
                                   
                                   <div className="flex items-center gap-2">
                                     <Target className="h-4 w-4 text-green-500" />
@@ -250,16 +282,16 @@ const Results = ({ results }: ResultsProps) => {
                                    <div className="flex items-center gap-2">
                                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                                      <div>
-                                       <div className="font-bold">{test.correct_keystrokes || 0}</div>
-                                       <div className="text-xs text-gray-500">Correct</div>
+                                       <div className="font-bold">{test.correct_words_count || 0}</div>
+                                       <div className="text-xs text-gray-500">Correct Words</div>
                                      </div>
                                    </div>
                                    
                                    <div className="flex items-center gap-2">
                                      <XCircle className="h-4 w-4 text-red-500" />
                                      <div>
-                                       <div className="font-bold">{test.wrong_keystrokes || test.errors || 0}</div>
-                                       <div className="text-xs text-gray-500">Errors</div>
+                                       <div className="font-bold">{test.incorrect_words || 0}</div>
+                                       <div className="text-xs text-gray-500">Wrong Words</div>
                                      </div>
                                    </div>
                                 </div>
@@ -308,8 +340,13 @@ const Results = ({ results }: ResultsProps) => {
             )}
           </CardContent>
         </Card>
-      </div>
-    );
+      </TabsContent>
+
+      <TabsContent value="leaderboard">
+        <Leaderboard currentUserId={user?.id} />
+      </TabsContent>
+    </Tabs>
+  );
   }
 
   if (!results) {
@@ -363,6 +400,7 @@ const Results = ({ results }: ResultsProps) => {
       testTitle: results.testTitle,
       language: results.language,
       wpm: results.wpm,
+      grossWpm: results.grossWpm,
       accuracy: results.accuracy,
       keystrokeAccuracy: keystrokeAccuracy,
       timeTaken: formatTime(results.timeTaken),
@@ -379,349 +417,104 @@ const Results = ({ results }: ResultsProps) => {
     URL.revokeObjectURL(url);
   };
 
-  // Render paragraph with color-coded words showing what was typed for wrong words
-  const renderColorCodedText = () => {
-    if (!results.originalText) return null;
-
-    const originalWords = results.originalText.split(' ');
-    const typedWords = results.typedText ? results.typedText.split(' ') : [];
-    const wrongWordIndices = new Set(results.wrongWordIndices || []);
-
-    return (
-      <div className="space-y-2">
-        <div className="text-sm text-gray-600 dark:text-gray-400 mb-3 flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span className="inline-block w-4 h-4 bg-green-100 dark:bg-green-900/30 rounded"></span>
-            <span>Correct words</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="inline-block w-4 h-4 bg-red-100 dark:bg-red-900/30 rounded"></span>
-            <span>Wrong words (shows what you typed)</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="inline-block w-4 h-4 bg-gray-200 dark:bg-gray-700 rounded"></span>
-            <span>Not typed</span>
-          </div>
-        </div>
-        <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg text-lg leading-relaxed max-h-64 overflow-y-auto">
-          {originalWords.map((word, index) => {
-            let displayText = word;
-            let className = 'mr-2 px-1 py-0.5 rounded inline-block ';
-            
-            if (index < typedWords.length) {
-              // Word was typed
-              if (wrongWordIndices.has(index)) {
-                // Wrong word - show original(typed)
-                const typedWord = typedWords[index] || '';
-                displayText = `${word}(${typedWord})`;
-                className += 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300';
-              } else {
-                // Correct word
-                className += 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300';
-              }
-            } else {
-              // Word was not typed
-              className += 'text-gray-500 dark:text-gray-400';
-            }
-
-            return (
-              <span key={index} className={className}>
-                {displayText}
-              </span>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <Card>
-        <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
-            <Trophy className="h-16 w-16 text-yellow-500" />
-          </div>
-          <CardTitle className="text-2xl">Test Completed!</CardTitle>
-          <div className="flex items-center justify-center gap-2 mt-2">
-            <Badge variant="outline">{results.testTitle}</Badge>
-            <Badge>{results.language === 'hindi' ? 'हिंदी' : 'English'}</Badge>
-          </div>
-        </CardHeader>
-      </Card>
-
-      {/* Performance Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-6 text-center">
-            <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${performance.bg} ${performance.color} mb-3`}>
-              {performance.level}
-            </div>
-            <div className="text-3xl font-bold mb-1">{results.wpm}</div>
-            <div className="text-sm text-gray-600 dark:text-gray-400 flex items-center justify-center gap-1">
-              <Zap className="h-4 w-4" />
-              Words Per Minute
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6 text-center">
-            <div className="text-3xl font-bold mb-1 text-green-600">{results.accuracy}%</div>
-            <div className="text-sm text-gray-600 dark:text-gray-400 flex items-center justify-center gap-1">
-              <Target className="h-4 w-4" />
-              Text Accuracy
-            </div>
-            <Progress value={results.accuracy} className="mt-2 h-2" />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6 text-center">
-            <div className="text-3xl font-bold mb-1">{formatTime(results.timeTaken)}</div>
-            <div className="text-sm text-gray-600 dark:text-gray-400 flex items-center justify-center gap-1">
-              <Clock className="h-4 w-4" />
-              Time Taken
-            </div>
-            <div className="text-xs text-gray-500 mt-1">
-              out of {formatTime(results.totalTime)}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6 text-center">
-            <div className="text-3xl font-bold mb-1">{results.grossWpm}</div>
-            <div className="text-sm text-gray-600 dark:text-gray-400 flex items-center justify-center gap-1">
-              <BarChart3 className="h-4 w-4" />
-              Gross WPM
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Text Analysis */}
-      {results.originalText && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Target className="h-5 w-5" />
-              Text Analysis
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {renderColorCodedText()}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Detailed Statistics */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Words Analysis */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-green-500" />
-              Words Analysis
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600 dark:text-gray-400">Total Words in Test</span>
-              <span className="font-semibold">{results.totalWords}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600 dark:text-gray-400">Words Typed</span>
-              <span className="font-semibold">{results.typedWords}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-green-600 dark:text-green-400">Correct Words</span>
-              <span className="font-semibold text-green-600">{results.correctWords}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-red-600 dark:text-red-400">Incorrect Words</span>
-              <span className="font-semibold text-red-600">{results.incorrectWords}</span>
-            </div>
-            
-            <div className="pt-2">
-              <div className="flex justify-between text-sm mb-1">
-                <span>Completion Rate</span>
-                <span>{Math.round((results.typedWords / results.totalWords) * 100)}%</span>
-              </div>
-              <Progress value={(results.typedWords / results.totalWords) * 100} className="h-2" />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Keystroke Analysis */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <XCircle className="h-5 w-5 text-blue-500" />
-              Keystroke Analysis
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600 dark:text-gray-400">Total Keystrokes</span>
-              <span className="font-semibold">{results.totalKeystrokes}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-blue-600 dark:text-blue-400">Typed Keystrokes</span>
-              <span className="font-semibold text-blue-600">{results.typedKeystrokes}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-green-600 dark:text-green-400">Correct Keystrokes</span>
-              <span className="font-semibold text-green-600">{results.correctKeystrokes}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-red-600 dark:text-red-400">Character Errors</span>
-              <span className="font-semibold text-red-600">{results.errors}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600 dark:text-gray-400">Error Rate</span>
-              <span className="font-semibold">{errorRate}%</span>
-            </div>
-            
-            <div className="pt-2">
-              <div className="flex justify-between text-sm mb-1">
-                <span>Keystroke Accuracy</span>
-                <span>{keystrokeAccuracy}%</span>
-              </div>
-              <Progress value={keystrokeAccuracy} className="h-2" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Performance Insights */}
+      {/* Current Test Results Card */}
       <Card>
         <CardHeader>
-          <CardTitle>Performance Insights</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <h4 className="font-semibold mb-2">Speed Analysis</h4>
-              <ul className="space-y-1 text-sm">
-                {results.wpm >= 40 && (
-                  <li className="flex items-center gap-2 text-green-600">
-                    <CheckCircle2 className="h-4 w-4" />
-                    Good typing speed achieved!
-                  </li>
-                )}
-                {results.wpm < 40 && (
-                  <li className="flex items-center gap-2 text-yellow-600">
-                    <Target className="h-4 w-4" />
-                    Practice more to improve speed
-                  </li>
-                )}
-                {results.accuracy >= 95 && (
-                  <li className="flex items-center gap-2 text-green-600">
-                    <CheckCircle2 className="h-4 w-4" />
-                    Excellent text accuracy!
-                  </li>
-                )}
-                {keystrokeAccuracy >= 95 && (
-                  <li className="flex items-center gap-2 text-green-600">
-                    <CheckCircle2 className="h-4 w-4" />
-                    Outstanding keystroke precision!
-                  </li>
-                )}
-                {results.accuracy < 95 && (
-                  <li className="flex items-center gap-2 text-yellow-600">
-                    <Target className="h-4 w-4" />
-                    Focus on accuracy improvement
-                  </li>
-                )}
-              </ul>
-            </div>
-            
-            <div>
-              <h4 className="font-semibold mb-2">Recommendations</h4>
-              <ul className="space-y-1 text-sm">
-                {results.errors > 10 && (
-                  <li className="text-gray-600 dark:text-gray-400">
-                    • Practice with error highlighting enabled
-                  </li>
-                )}
-                {errorRate > 5 && (
-                  <li className="text-gray-600 dark:text-gray-400">
-                    • Slow down and focus on accuracy first
-                  </li>
-                )}
-                {results.wpm < 30 && (
-                  <li className="text-gray-600 dark:text-gray-400">
-                    • Focus on finger placement and posture
-                  </li>
-                )}
-                <li className="text-gray-600 dark:text-gray-400">
-                  • Regular practice improves muscle memory
-                </li>
-                <li className="text-gray-600 dark:text-gray-400">
-                  • Try different difficulty levels
-                </li>
-              </ul>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Trophy className="h-6 w-6 text-primary" />
+              Test Results
+            </CardTitle>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={shareResults}>
+                <Share2 className="h-4 w-4 mr-2" />
+                Share
+              </Button>
+              <Button variant="outline" size="sm" onClick={downloadResults}>
+                <Download className="h-4 w-4 mr-2" />
+                Download
+              </Button>
             </div>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Performance Metrics Summary */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Detailed Metrics Summary</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div className="text-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <div className="font-medium text-gray-500 dark:text-gray-400">Net WPM</div>
-              <div className="text-xl font-bold">{results.wpm}</div>
+        <CardContent className="space-y-6">
+          {/* Performance Badge */}
+          <div className="flex justify-center">
+            <Badge className={`${performance.bg} ${performance.color} px-6 py-2 text-lg font-bold border-2`}>
+              {performance.level} Typist
+            </Badge>
+          </div>
+
+          {/* Main Stats Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 border-blue-200 dark:border-blue-800">
+              <CardContent className="p-4 text-center">
+                <Zap className="h-8 w-8 mx-auto mb-2 text-blue-600 dark:text-blue-400" />
+                <div className="text-3xl font-bold text-blue-700 dark:text-blue-300">{results.wpm}</div>
+                <div className="text-sm text-blue-600 dark:text-blue-400">Net WPM</div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900 border-purple-200 dark:border-purple-800">
+              <CardContent className="p-4 text-center">
+                <BarChart3 className="h-8 w-8 mx-auto mb-2 text-purple-600 dark:text-purple-400" />
+                <div className="text-3xl font-bold text-purple-700 dark:text-purple-300">{results.grossWpm}</div>
+                <div className="text-sm text-purple-600 dark:text-purple-400">Gross WPM</div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900 border-green-200 dark:border-green-800">
+              <CardContent className="p-4 text-center">
+                <Target className="h-8 w-8 mx-auto mb-2 text-green-600 dark:text-green-400" />
+                <div className="text-3xl font-bold text-green-700 dark:text-green-300">{results.accuracy.toFixed(1)}%</div>
+                <div className="text-sm text-green-600 dark:text-green-400">Accuracy</div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-950 dark:to-orange-900 border-orange-200 dark:border-orange-800">
+              <CardContent className="p-4 text-center">
+                <Clock className="h-8 w-8 mx-auto mb-2 text-orange-600 dark:text-orange-400" />
+                <div className="text-3xl font-bold text-orange-700 dark:text-orange-300">{formatTime(results.timeTaken)}</div>
+                <div className="text-sm text-orange-600 dark:text-orange-400">Time Taken</div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Detailed Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="text-center p-3 rounded-lg bg-muted">
+              <CheckCircle2 className="h-5 w-5 mx-auto mb-1 text-green-500" />
+              <div className="text-xl font-bold">{results.correctWords}</div>
+              <div className="text-xs text-muted-foreground">Correct Words</div>
             </div>
-            <div className="text-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <div className="font-medium text-gray-500 dark:text-gray-400">Gross WPM</div>
-              <div className="text-xl font-bold">{results.grossWpm}</div>
+            <div className="text-center p-3 rounded-lg bg-muted">
+              <XCircle className="h-5 w-5 mx-auto mb-1 text-red-500" />
+              <div className="text-xl font-bold">{results.incorrectWords}</div>
+              <div className="text-xs text-muted-foreground">Incorrect Words</div>
             </div>
-            <div className="text-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <div className="font-medium text-gray-500 dark:text-gray-400">Text Accuracy</div>
-              <div className="text-xl font-bold">{results.accuracy}%</div>
-            </div>
-            <div className="text-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <div className="font-medium text-gray-500 dark:text-gray-400">Keystroke Accuracy</div>
+            <div className="text-center p-3 rounded-lg bg-muted">
+              <Keyboard className="h-5 w-5 mx-auto mb-1 text-blue-500" />
               <div className="text-xl font-bold">{keystrokeAccuracy}%</div>
+              <div className="text-xs text-muted-foreground">Keystroke Accuracy</div>
+            </div>
+            <div className="text-center p-3 rounded-lg bg-muted">
+              <FileText className="h-5 w-5 mx-auto mb-1 text-purple-500" />
+              <div className="text-xl font-bold">{results.typedWords}/{results.totalWords}</div>
+              <div className="text-xs text-muted-foreground">Words Typed</div>
             </div>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Actions */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex flex-wrap gap-4 justify-center">
+          {/* View History Button */}
+          <div className="flex justify-center">
             <Button 
               variant="outline" 
               onClick={handleShowAllResults}
               className="flex items-center gap-2"
             >
               <History className="h-4 w-4" />
-              View All Results
-            </Button>
-            <Button onClick={shareResults} className="flex items-center gap-2">
-              <Share2 className="h-4 w-4" />
-              Share Results
-            </Button>
-            <Button variant="outline" onClick={downloadResults} className="flex items-center gap-2">
-              <Download className="h-4 w-4" />
-              Download Results
-            </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => window.location.reload()} 
-              className="flex items-center gap-2"
-            >
-              <Trophy className="h-4 w-4" />
-              Take Another Test
+              View Test History & Leaderboard
             </Button>
           </div>
         </CardContent>
