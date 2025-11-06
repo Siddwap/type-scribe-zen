@@ -3,11 +3,14 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { User, LogOut, Trophy, TrendingUp, Clock, Target } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { User, LogOut, Trophy, TrendingUp, Clock, Target, Edit, Upload } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 interface UserProfileProps {
   user: any;
@@ -16,6 +19,10 @@ interface UserProfileProps {
 
 const UserProfile = ({ user, onSignOut }: UserProfileProps) => {
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [fullName, setFullName] = useState("");
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const queryClient = useQueryClient();
 
   // Fetch user profile
   const { data: profile } = useQuery({
@@ -29,6 +36,7 @@ const UserProfile = ({ user, onSignOut }: UserProfileProps) => {
         .single();
       
       if (error) throw error;
+      setFullName(data?.full_name || "");
       return data;
     },
     enabled: !!user
@@ -83,6 +91,55 @@ const UserProfile = ({ user, onSignOut }: UserProfileProps) => {
   const bestWPM = totalTests > 0 ? Math.max(...results.map(r => r.wpm)) : 0;
   const totalTimeSpent = results.reduce((sum, r) => sum + r.time_taken, 0);
 
+  const updateProfileMutation = useMutation({
+    mutationFn: async () => {
+      let avatarUrl = profile?.avatar_url;
+
+      if (avatarFile) {
+        const fileExt = avatarFile.name.split('.').pop();
+        const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('avatars')
+          .upload(fileName, avatarFile, { upsert: true });
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('avatars')
+          .getPublicUrl(fileName);
+        
+        avatarUrl = publicUrl;
+      }
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: fullName,
+          ...(avatarUrl && { avatar_url: avatarUrl })
+        })
+        .eq('id', user.id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["profile", user.id] });
+      setIsEditDialogOpen(false);
+      setAvatarFile(null);
+      toast({
+        title: "Profile Updated",
+        description: "Your profile has been updated successfully.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Update Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const getInitials = (name: string) => {
     return name
       .split(' ')
@@ -100,6 +157,7 @@ const UserProfile = ({ user, onSignOut }: UserProfileProps) => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Avatar className="h-16 w-16">
+                <AvatarImage src={profile?.avatar_url} />
                 <AvatarFallback className="text-lg font-semibold bg-gradient-to-r from-blue-500 to-purple-600 text-white">
                   {profile?.full_name ? getInitials(profile.full_name) : 'U'}
                 </AvatarFallback>
@@ -116,15 +174,69 @@ const UserProfile = ({ user, onSignOut }: UserProfileProps) => {
                 </div>
               </div>
             </div>
-            <Button 
-              variant="outline" 
-              onClick={handleSignOut}
-              disabled={isSigningOut}
-              className="flex items-center gap-2"
-            >
-              <LogOut className="h-4 w-4" />
-              {isSigningOut ? 'Signing out...' : 'Sign Out'}
-            </Button>
+            <div className="flex gap-2">
+              <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit Profile
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Edit Profile</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="fullName">Full Name</Label>
+                      <Input
+                        id="fullName"
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                        placeholder="Enter your full name"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="avatar">Profile Picture</Label>
+                      <div className="flex items-center gap-4">
+                        <Avatar className="h-16 w-16">
+                          <AvatarImage src={avatarFile ? URL.createObjectURL(avatarFile) : profile?.avatar_url} />
+                          <AvatarFallback className="bg-primary text-primary-foreground">
+                            {fullName ? getInitials(fullName) : "U"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1">
+                          <Input
+                            id="avatar"
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => setAvatarFile(e.target.files?.[0] || null)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <Button 
+                      onClick={() => updateProfileMutation.mutate()} 
+                      disabled={updateProfileMutation.isPending}
+                      className="w-full"
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      {updateProfileMutation.isPending ? "Updating..." : "Update Profile"}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleSignOut}
+                disabled={isSigningOut}
+                className="flex items-center gap-2"
+              >
+                <LogOut className="h-4 w-4" />
+                {isSigningOut ? 'Signing out...' : 'Sign Out'}
+              </Button>
+            </div>
           </div>
         </CardHeader>
       </Card>

@@ -7,7 +7,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Trash2, Edit, Plus, Save, X } from 'lucide-react';
+import { Trash2, Edit, Plus, Save, X, Users, CheckCircle, XCircle, Ban, UserCheck } from 'lucide-react';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -81,6 +83,88 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
 
   // Get unique categories
   const categories = Array.from(new Set(tests.map(test => test.category))).filter(Boolean);
+
+  // Fetch all users for admin management
+  const { data: users = [], refetch: refetchUsers } = useQuery({
+    queryKey: ['admin-users'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+
+      // Fetch test counts for each user
+      const usersWithCounts = await Promise.all(
+        data.map(async (user) => {
+          const { count } = await supabase
+            .from('test_results')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', user.id);
+          
+          return { ...user, test_count: count || 0 };
+        })
+      );
+      
+      return usersWithCounts;
+    }
+  });
+
+  const handleUpdateUserStatus = async (userId: string, status: string) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ status })
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success',
+        description: `User ${status === 'active' ? 'approved' : status === 'restricted' ? 'restricted' : 'updated'} successfully`,
+      });
+      refetchUsers();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success',
+        description: 'User deleted successfully',
+      });
+      refetchUsers();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const getInitials = (name: string) => {
+    return name
+      ?.split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2) || 'U';
+  };
 
   const handleCreateTest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -759,6 +843,123 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
                           No categories found. Create your first category above.
                         </div>
                       )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            {/* User Management Tab */}
+            <TabsContent value="users">
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Users className="h-5 w-5" />
+                      User Management
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>User</TableHead>
+                            <TableHead>Email</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Tests Completed</TableHead>
+                            <TableHead>Joined</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {users.map((user) => (
+                            <TableRow key={user.id}>
+                              <TableCell>
+                                <div className="flex items-center gap-3">
+                                  <Avatar className="h-10 w-10">
+                                    <AvatarImage src={user.avatar_url} />
+                                    <AvatarFallback className="bg-primary text-primary-foreground">
+                                      {getInitials(user.full_name)}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <span className="font-medium">{user.full_name || 'Unknown'}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell>{user.email}</TableCell>
+                              <TableCell>
+                                <Badge
+                                  variant={
+                                    user.status === 'active' ? 'default' :
+                                    user.status === 'restricted' ? 'destructive' :
+                                    'secondary'
+                                  }
+                                >
+                                  {user.status || 'active'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>{user.test_count || 0}</TableCell>
+                              <TableCell>
+                                {new Date(user.created_at).toLocaleDateString()}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex justify-end gap-2">
+                                  {user.status !== 'active' && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleUpdateUserStatus(user.id, 'active')}
+                                      title="Approve User"
+                                    >
+                                      <CheckCircle className="h-4 w-4 text-green-600" />
+                                    </Button>
+                                  )}
+                                  {user.status !== 'restricted' && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleUpdateUserStatus(user.id, 'restricted')}
+                                      title="Restrict User"
+                                    >
+                                      <Ban className="h-4 w-4 text-orange-600" />
+                                    </Button>
+                                  )}
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <Button size="sm" variant="destructive" title="Delete User">
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>Delete User</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          Are you sure you want to delete {user.full_name || 'this user'}? 
+                                          This will permanently delete their profile and all associated data. 
+                                          This action cannot be undone.
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => handleDeleteUser(user.id)}>
+                                          Delete User
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {users.length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                                No users found
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
                     </div>
                   </CardContent>
                 </Card>
