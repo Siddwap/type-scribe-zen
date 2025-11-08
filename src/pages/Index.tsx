@@ -11,7 +11,7 @@ import type { User, Session } from '@supabase/supabase-js';
 import Auth from '@/components/Auth';
 import AdminPanel from '@/components/AdminPanel';
 import TypingTest from '@/components/TypingTest';
-
+import { NoticeModal } from '@/components/NoticeModal';
 import Results from '@/components/Results';
 import UserProfile from '@/components/UserProfile';
 
@@ -34,6 +34,7 @@ const Index = () => {
   });
   const [currentTest, setCurrentTest] = useState(null);
   const [testResults, setTestResults] = useState(null);
+  const [showNotice, setShowNotice] = useState(true);
 
   useEffect(() => {
     let mounted = true;
@@ -204,6 +205,7 @@ const Index = () => {
 
   return (
     <QueryClientProvider client={queryClient}>
+      {showNotice && session && <NoticeModal onClose={() => setShowNotice(false)} />}
       <div className={`min-h-screen transition-all duration-300 ${
         darkMode 
           ? 'bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900' 

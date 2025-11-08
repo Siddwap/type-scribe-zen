@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Trash2, Edit, Plus, Save, X, Users, CheckCircle, XCircle, Ban, UserCheck } from 'lucide-react';
+import { NoticeManager } from './NoticeManager';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from '@/hooks/use-toast';
@@ -457,11 +458,12 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="create-test" className="space-y-4">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="create-test">Create Test</TabsTrigger>
               <TabsTrigger value="manage-tests">Manage Tests</TabsTrigger>
               <TabsTrigger value="manage-categories">Manage Categories</TabsTrigger>
               <TabsTrigger value="users">Manage Users</TabsTrigger>
+              <TabsTrigger value="notices">Manage Notices</TabsTrigger>
             </TabsList>
 
             <TabsContent value="create-test">
@@ -965,6 +967,10 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
                   </CardContent>
                 </Card>
               </div>
+            </TabsContent>
+
+            <TabsContent value="notices">
+              <NoticeManager />
             </TabsContent>
           </Tabs>
         </CardContent>

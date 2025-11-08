@@ -44,6 +44,42 @@ export type Database = {
         }
         Relationships: []
       }
+      site_notices: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          image_url: string | null
+          is_enabled: boolean
+          link_text: string | null
+          link_url: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          is_enabled?: boolean
+          link_text?: string | null
+          link_url?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          is_enabled?: boolean
+          link_text?: string | null
+          link_url?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       test_results: {
         Row: {
           accuracy: number
