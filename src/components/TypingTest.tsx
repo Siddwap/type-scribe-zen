@@ -167,18 +167,24 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
 
   const startTest = () => {
     if (!isActive && !isFinished) {
-      setIsActive(true);
-      setStartTime(new Date());
+      // Just hide settings and show typing interface, don't start timer yet
       setShowSettings(false);
     }
   };
 
+  const startTimer = () => {
+    if (!isActive && !isFinished && !startTime) {
+      setIsActive(true);
+      setStartTime(new Date());
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Start test on first key press (except Tab and blocked shortcuts)
+    // Start timer on first key press (except Tab and blocked shortcuts)
     if (!isActive && !isFinished && e.key !== 'Tab') {
       // Don't start on Ctrl/Cmd shortcuts
       if (!(e.ctrlKey || e.metaKey)) {
-        startTest();
+        startTimer();
       }
     }
     
@@ -826,8 +832,8 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
         </Card>
       )}
 
-      {/* Test Statistics - Show during and after test */}
-      {(isActive || isFinished) && (
+      {/* Test Statistics - Show after clicking start test */}
+      {(!showSettings && selectedTest) && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card>
             <CardContent className="p-4 text-center">
@@ -863,8 +869,8 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
         </div>
       )}
 
-      {/* Main Test Card - Show during and after test */}
-      {(isActive || isFinished) && (
+      {/* Main Test Card - Show after clicking start test */}
+      {(!showSettings && selectedTest) && (
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
