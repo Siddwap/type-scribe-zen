@@ -693,9 +693,13 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     );
   }
 
-  // Get categories with "Daily New Tests" as first
+  // Get categories with "Daily New Tests" as first and "Stored Tests" as second
   const availableCategories = selectedLanguage ? 
-    ['Daily New Tests', ...Array.from(new Set(availableTests.map(test => test.category))).filter(Boolean)] : 
+    [
+      'Daily New Tests',
+      ...(availableTests.some(test => test.category === 'Daily New Tests') ? ['Stored Tests'] : []),
+      ...Array.from(new Set(availableTests.map(test => test.category))).filter(cat => cat !== 'Daily New Tests')
+    ] : 
     [];
 
   // Category Selection Step
@@ -731,9 +735,15 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {availableCategories.map(category => {
-              const testsCount = category === 'Daily New Tests' ? 
-                '∞' : 
-                availableTests.filter(t => t.category === category).length;
+              let testsCount;
+              if (category === 'Daily New Tests') {
+                testsCount = '∞';
+              } else if (category === 'Stored Tests') {
+                testsCount = availableTests.filter(t => t.category === 'Daily New Tests').length;
+              } else {
+                testsCount = availableTests.filter(t => t.category === category).length;
+              }
+              
               return (
                 <Card 
                   key={category}
@@ -848,9 +858,9 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
   }
 
   // Test Selection Step for regular categories
-  const categoryTests = availableTests.filter(
-    test => test.category === selectedCategory
-  );
+  const categoryTests = selectedCategory === 'Stored Tests'
+    ? availableTests.filter(test => test.category === 'Daily New Tests')
+    : availableTests.filter(test => test.category === selectedCategory);
 
   if (selectedLanguage && selectedCategory && selectedCategory !== 'Daily New Tests' && !selectedTest) {
     return (
@@ -889,34 +899,50 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
             </div>
           ) : (
             <div className="space-y-4">
-              {categoryTests.map((test) => (
-                <Card 
-                  key={test.id} 
-                  className="group cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all duration-300 border-2 hover:border-primary"
-                  onClick={() => selectTest(test)}
-                >
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className="font-bold text-xl mb-3 group-hover:text-primary transition-colors">{test.title}</h3>
-                        <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
-                          {test.content.substring(0, 180)}...
-                        </p>
-                        <div className="flex gap-2 flex-wrap">
-                          <Badge variant="secondary" className="capitalize">{test.difficulty}</Badge>
-                          <Badge variant="outline" className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {Math.floor(test.time_limit / 60)}:{(test.time_limit % 60).toString().padStart(2, '0')}
-                          </Badge>
-                          <Badge variant="outline">
-                            {test.content.split(' ').length} words
-                          </Badge>
+              {categoryTests.map((test) => {
+                // For Stored Tests category, get the difficulty from database or convert it
+                const displayDifficulty = selectedCategory === 'Stored Tests' 
+                  ? (test.difficulty === 'hard' ? 'H' : test.difficulty === 'medium' ? 'M' : 'E')
+                  : test.difficulty;
+                
+                return (
+                  <Card 
+                    key={test.id} 
+                    className="group cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all duration-300 border-2 hover:border-primary"
+                    onClick={() => selectTest(test)}
+                  >
+                    <CardContent className="p-6">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          {selectedCategory === 'Stored Tests' && (
+                            <div className="mb-2">
+                              <span className={`font-bold ${getDifficultyColor(displayDifficulty)} text-sm`}>
+                                [{getDifficultyLabel(displayDifficulty)}]
+                              </span>
+                            </div>
+                          )}
+                          <h3 className="font-bold text-xl mb-3 group-hover:text-primary transition-colors">{test.title}</h3>
+                          <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
+                            {test.content.substring(0, 180)}...
+                          </p>
+                          <div className="flex gap-2 flex-wrap">
+                            {selectedCategory !== 'Stored Tests' && (
+                              <Badge variant="secondary" className="capitalize">{test.difficulty}</Badge>
+                            )}
+                            <Badge variant="outline" className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {Math.floor(test.time_limit / 60)}:{(test.time_limit % 60).toString().padStart(2, '0')}
+                            </Badge>
+                            <Badge variant="outline">
+                              {test.content.split(' ').length} words
+                            </Badge>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </CardContent>
