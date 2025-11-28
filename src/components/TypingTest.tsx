@@ -198,7 +198,7 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
         language: selectedLanguage,
         difficulty: test.difficulty,
         category: 'Daily New Tests',
-        time_limit: 60
+        time_limit: 900
       }));
       
       setDailyTests(processedTests);
@@ -1096,6 +1096,17 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
               autoCapitalize="off"
               spellCheck={false}
             />
+            
+            {isActive && (
+              <Button 
+                onClick={handleTestComplete}
+                size="lg"
+                className="w-full"
+                variant="default"
+              >
+                Submit Test
+              </Button>
+            )}
           </CardContent>
         </Card>
       )}
