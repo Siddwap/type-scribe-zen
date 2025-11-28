@@ -75,8 +75,8 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
   // Text processing functions
   const convertToStraightQuotes = (str: string) => {
     return str
-      .replace(/[""]/g, '"')
-      .replace(/['']/g, "'");
+      .replace(/[“”]/g, '"')
+      .replace(/[‘’]/g, "'");
   };
 
   const fixNukta = (str: string) => {
