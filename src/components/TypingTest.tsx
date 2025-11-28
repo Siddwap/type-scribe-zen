@@ -248,6 +248,64 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     }
   };
 
+  const selectTest = async (test: any) => {
+    let testToSet = test;
+    
+    // If this is a test from Daily New Tests API, save it to database first
+    if (selectedCategory === 'Daily New Tests') {
+      try {
+        // Check if test already exists in database
+        const { data: existingTest } = await supabase
+          .from('typing_tests')
+          .select('id')
+          .eq('content', test.content)
+          .eq('title', test.title)
+          .maybeSingle();
+        
+        if (existingTest) {
+          testToSet = { ...test, id: existingTest.id };
+        } else {
+          // Insert the API test into database
+          const { data: newTest, error } = await supabase
+            .from('typing_tests')
+            .insert({
+              title: test.title,
+              content: test.content,
+              language: selectedLanguage,
+              difficulty: test.difficulty === 'H' ? 'hard' : test.difficulty === 'M' ? 'medium' : 'easy',
+              time_limit: 900,
+              category: 'Daily New Tests',
+              is_active: true
+            })
+            .select('id')
+            .single();
+          
+          if (error) {
+            console.error('Error saving API test to database:', error);
+            toast({
+              title: "Error",
+              description: "Failed to save test to database",
+              variant: "destructive"
+            });
+            return;
+          }
+          
+          testToSet = { ...test, id: newTest.id };
+        }
+      } catch (error) {
+        console.error('Error handling API test:', error);
+        toast({
+          title: "Error",
+          description: "Failed to process test",
+          variant: "destructive"
+        });
+        return;
+      }
+    }
+    
+    setSelectedTest(testToSet);
+  };
+
   const resetTest = () => {
     setIsActive(false);
     setIsFinished(false);
@@ -448,7 +506,7 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user && selectedTest && selectedTest.id !== 'custom-text' && selectedTest.category !== 'Daily New Tests') {
+      if (user && selectedTest && selectedTest.id !== 'custom-text') {
         const { error: insertError } = await supabase.from('test_results').insert([{
           user_id: user.id,
           test_id: selectedTest.id,
@@ -486,10 +544,10 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
             setShowLeaderboard(true);
           }
         }
-      } else if (selectedTest?.id === 'custom-text' || selectedTest?.category === 'Daily New Tests') {
+      } else if (selectedTest?.id === 'custom-text') {
         toast({
           title: "Test completed!",
-          description: "Results for this test are not saved to history.",
+          description: "Results for custom text are not saved to history.",
         });
       }
     } catch (error) {
@@ -767,7 +825,7 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
                   <Card
                     key={test.id}
                     className="group cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all duration-300 border-2 hover:border-primary"
-                    onClick={() => setSelectedTest(test)}
+                    onClick={() => selectTest(test)}
                   >
                     <CardContent className="p-4">
                       <div className="flex items-start gap-2">
@@ -835,7 +893,7 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
                 <Card 
                   key={test.id} 
                   className="group cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all duration-300 border-2 hover:border-primary"
-                  onClick={() => setSelectedTest(test)}
+                  onClick={() => selectTest(test)}
                 >
                   <CardContent className="p-6">
                     <div className="flex items-start justify-between">
