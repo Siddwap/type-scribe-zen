@@ -97,7 +97,7 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
       const { data, error } = await supabase
         .from('typing_tests')
         .select('*')
-        .eq('language', selectedLanguage === 'english' ? 'English' : 'Hindi')
+        .eq('language', selectedLanguage)
         .eq('is_active', true)
         .order('created_at', { ascending: false });
       
