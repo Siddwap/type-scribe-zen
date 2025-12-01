@@ -626,17 +626,7 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
       // Fetch top users for the selected date
       const { data, error } = await supabase
         .from('test_results')
-        .select(`
-          id,
-          user_id,
-          wpm,
-          accuracy,
-          time_taken,
-          total_words,
-          completed_at,
-          test_id,
-          profiles!inner(full_name, email)
-        `)
+        .select('id, user_id, wpm, accuracy, time_taken, total_words, completed_at, test_id')
         .gte('completed_at', `${dateStr}T00:00:00`)
         .lte('completed_at', `${dateStr}T23:59:59`)
         .gte('accuracy', 85)
@@ -656,9 +646,21 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
         return;
       }
 
-      // Get unique test IDs to fetch test details
+      // Get unique user IDs and test IDs
+      const userIds = [...new Set(data.map((result: any) => result.user_id))];
       const testIds = [...new Set(data.map((result: any) => result.test_id))];
       
+      // Fetch profile details
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', userIds);
+
+      if (profileError) {
+        console.error('Profile query error:', profileError);
+        throw profileError;
+      }
+
       // Fetch test details for languages
       const { data: testData, error: testError } = await supabase
         .from('typing_tests')
@@ -670,7 +672,10 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
         throw testError;
       }
 
-      // Create a map of test_id to language
+      // Create maps for quick lookup
+      const profileMap = new Map(
+        profileData?.map((profile: any) => [profile.id, profile]) || []
+      );
       const testLanguageMap = new Map(
         testData?.map((test: any) => [test.id, test.language]) || []
       );
@@ -678,21 +683,25 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
       // Filter and format the data
       const topUsers = data
         .filter((result: any) => 
-          result.time_taken >= 600 || (result.total_words || 0) >= 400
+          result.accuracy >= 85 && 
+          (result.time_taken >= 600 || (result.total_words || 0) >= 400)
         )
-        .map((result: any) => ({
-          result_id: result.id,
-          user_id: result.user_id,
-          wpm: result.wpm,
-          accuracy: result.accuracy,
-          time_taken: result.time_taken,
-          total_words: result.total_words || 0,
-          completed_at: result.completed_at,
-          language: testLanguageMap.get(result.test_id) || 'english',
-          display_name: result.profiles?.full_name || 
-                       result.profiles?.email?.split('@')[0] || 
-                       'Anonymous'
-        }))
+        .map((result: any) => {
+          const profile = profileMap.get(result.user_id);
+          return {
+            result_id: result.id,
+            user_id: result.user_id,
+            wpm: result.wpm,
+            accuracy: result.accuracy,
+            time_taken: result.time_taken,
+            total_words: result.total_words || 0,
+            completed_at: result.completed_at,
+            language: testLanguageMap.get(result.test_id) || 'english',
+            display_name: profile?.full_name || 
+                         profile?.email?.split('@')[0] || 
+                         'Anonymous'
+          };
+        })
         .slice(0, 100);
 
       if (topUsers.length === 0) {
