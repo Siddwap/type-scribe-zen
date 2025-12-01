@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { loadDevanagariFont, setFontForLanguage } from './pdfFontLoader';
 
 interface TestResult {
   id: string;
@@ -32,9 +33,11 @@ interface TopUser {
   test_title?: string;
 }
 
-// Configure jsPDF for UTF-8 support
-const configurePDFForUnicode = (doc: jsPDF) => {
-  // Use helvetica font which has better Unicode support
+// Configure jsPDF for UTF-8 support and load Devanagari font
+const configurePDFForUnicode = async (doc: jsPDF) => {
+  // Load Devanagari font for Hindi support
+  await loadDevanagariFont(doc);
+  // Set default to helvetica initially
   doc.setFont('helvetica', 'normal');
 };
 
@@ -104,9 +107,9 @@ const formatTime = (seconds: number): string => {
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 };
 
-export const exportUserTestHistory = (userName: string, testHistory: TestResult[]) => {
+export const exportUserTestHistory = async (userName: string, testHistory: TestResult[]) => {
   const doc = new jsPDF();
-  configurePDFForUnicode(doc);
+  await configurePDFForUnicode(doc);
   
   // Add branding header
   addBrandingHeader(doc, `Test History Report - ${userName}`);
@@ -147,7 +150,7 @@ export const exportUserTestHistory = (userName: string, testHistory: TestResult[
     new Date(result.completed_at).toLocaleTimeString()
   ]);
   
-  // Add table
+  // Add table with font support for Hindi
   autoTable(doc, {
     startY: 72,
     head: [['#', 'Test Title', 'Category', 'Lang', 'WPM', 'Acc', 'Time', 'Words', 'Correct', 'Incorrect', 'Gross', 'Date', 'Time']],
@@ -162,6 +165,16 @@ export const exportUserTestHistory = (userName: string, testHistory: TestResult[
     },
     bodyStyles: {
       fontSize: 7
+    },
+    didParseCell: function(data) {
+      // Use Devanagari font for Test Title column if it contains Hindi text
+      if (data.column.index === 1 && data.cell.raw) {
+        const text = data.cell.raw.toString();
+        // Check if text contains Devanagari characters (U+0900 to U+097F)
+        if (/[\u0900-\u097F]/.test(text)) {
+          data.cell.styles.font = 'NotoSansDevanagari';
+        }
+      }
     },
     alternateRowStyles: {
       fillColor: [248, 250, 252]
@@ -193,7 +206,7 @@ export const exportUserTestHistory = (userName: string, testHistory: TestResult[
 
 export const exportTopUsersByDate = async (date: string, topUsers: TopUser[], testTitle?: string) => {
   const doc = new jsPDF();
-  configurePDFForUnicode(doc);
+  await configurePDFForUnicode(doc);
   
   const reportTitle = testTitle 
     ? `Top Users - ${testTitle}` 
@@ -226,7 +239,7 @@ export const exportTopUsersByDate = async (date: string, topUsers: TopUser[], te
     new Date(date).toLocaleDateString()
   ]);
   
-  // Add table
+  // Add table with Hindi font support
   autoTable(doc, {
     startY: 72,
     head: [['Rank', 'User Name', 'Test Title', 'WPM', 'Accuracy', 'Time', 'Words', 'Lang', 'Date']],
@@ -241,6 +254,15 @@ export const exportTopUsersByDate = async (date: string, topUsers: TopUser[], te
     },
     bodyStyles: {
       fontSize: 9
+    },
+    didParseCell: function(data) {
+      // Use Devanagari font for Test Title column (index 2) if it contains Hindi text
+      if (data.column.index === 2 && data.cell.raw) {
+        const text = data.cell.raw.toString();
+        if (/[\u0900-\u097F]/.test(text)) {
+          data.cell.styles.font = 'NotoSansDevanagari';
+        }
+      }
     },
     alternateRowStyles: {
       fillColor: [248, 250, 252]
@@ -268,9 +290,9 @@ export const exportTopUsersByDate = async (date: string, topUsers: TopUser[], te
   doc.save(fileName);
 };
 
-export const exportAllTimeTopUsers = (topUsers: TopUser[]) => {
+export const exportAllTimeTopUsers = async (topUsers: TopUser[]) => {
   const doc = new jsPDF();
-  configurePDFForUnicode(doc);
+  await configurePDFForUnicode(doc);
   
   // Add branding header
   addBrandingHeader(doc, 'All-Time Top Users');
@@ -299,7 +321,7 @@ export const exportAllTimeTopUsers = (topUsers: TopUser[]) => {
     user.completed_at ? new Date(user.completed_at).toLocaleDateString() : 'N/A'
   ]);
   
-  // Add table
+  // Add table with Hindi font support
   autoTable(doc, {
     startY: 72,
     head: [['Rank', 'User Name', 'Test Title', 'WPM', 'Accuracy', 'Time', 'Words', 'Lang', 'Date']],
@@ -314,6 +336,15 @@ export const exportAllTimeTopUsers = (topUsers: TopUser[]) => {
     },
     bodyStyles: {
       fontSize: 9
+    },
+    didParseCell: function(data) {
+      // Use Devanagari font for Test Title column (index 2) if it contains Hindi text
+      if (data.column.index === 2 && data.cell.raw) {
+        const text = data.cell.raw.toString();
+        if (/[\u0900-\u097F]/.test(text)) {
+          data.cell.styles.font = 'NotoSansDevanagari';
+        }
+      }
     },
     alternateRowStyles: {
       fillColor: [248, 250, 252]
@@ -338,16 +369,21 @@ export const exportAllTimeTopUsers = (topUsers: TopUser[]) => {
   doc.save(`all_time_top_users_${Date.now()}.pdf`);
 };
 
-export const exportPerTestTopUsers = (testTitle: string, testContent: string, topUsers: TopUser[]) => {
+export const exportPerTestTopUsers = async (testTitle: string, testContent: string, topUsers: TopUser[]) => {
   const doc = new jsPDF();
-  configurePDFForUnicode(doc);
+  await configurePDFForUnicode(doc);
   
   // Add branding header
   addBrandingHeader(doc, `Top Users - ${testTitle}`);
   
   // Add test info section
   doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
+  // Check if test title contains Hindi characters and set appropriate font
+  if (/[\u0900-\u097F]/.test(testTitle)) {
+    doc.setFont('NotoSansDevanagari', 'normal');
+  } else {
+    doc.setFont('helvetica', 'bold');
+  }
   doc.text(`Test: ${testTitle}`, 15, 45);
   
   doc.setFontSize(10);
@@ -357,11 +393,21 @@ export const exportPerTestTopUsers = (testTitle: string, testContent: string, to
   
   // Add test content preview
   doc.setFontSize(9);
-  doc.setFont('helvetica', 'italic');
+  // Check if content contains Hindi characters
+  if (/[\u0900-\u097F]/.test(testContent)) {
+    doc.setFont('NotoSansDevanagari', 'normal');
+  } else {
+    doc.setFont('helvetica', 'italic');
+  }
   doc.setTextColor(80, 80, 80);
   const contentPreview = testContent.substring(0, 200) + (testContent.length > 200 ? '...' : '');
   const splitContent = doc.splitTextToSize(contentPreview, 180);
+  doc.setFont('helvetica', 'normal');
   doc.text('Test Content Preview:', 15, 66);
+  // Set Hindi font for content if needed
+  if (/[\u0900-\u097F]/.test(testContent)) {
+    doc.setFont('NotoSansDevanagari', 'normal');
+  }
   doc.text(splitContent, 15, 71);
   
   doc.setTextColor(0, 0, 0);
@@ -381,7 +427,7 @@ export const exportPerTestTopUsers = (testTitle: string, testContent: string, to
     user.completed_at ? new Date(user.completed_at).toLocaleDateString() : 'N/A'
   ]);
   
-  // Add table
+  // Add table with Hindi font support for test title
   autoTable(doc, {
     startY: startY,
     head: [['Rank', 'User Name', 'WPM', 'Accuracy', 'Time Taken', 'Total Words', 'Language', 'Date']],
@@ -396,6 +442,14 @@ export const exportPerTestTopUsers = (testTitle: string, testContent: string, to
     },
     bodyStyles: {
       fontSize: 9
+    },
+    didParseCell: function(data) {
+      // Check if we need Hindi font (test title might have Hindi in it)
+      if (data.cell.raw && typeof data.cell.raw === 'string') {
+        if (/[\u0900-\u097F]/.test(data.cell.raw)) {
+          data.cell.styles.font = 'NotoSansDevanagari';
+        }
+      }
     },
     alternateRowStyles: {
       fillColor: [248, 250, 252]
