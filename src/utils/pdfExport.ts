@@ -29,7 +29,14 @@ interface TopUser {
   display_name: string;
   completed_at?: string;
   language?: string;
+  test_title?: string;
 }
+
+// Configure jsPDF for UTF-8 support
+const configurePDFForUnicode = (doc: jsPDF) => {
+  // Use helvetica font which has better Unicode support
+  doc.setFont('helvetica', 'normal');
+};
 
 // Add website branding header to PDF
 const addBrandingHeader = (doc: jsPDF, title: string) => {
@@ -99,6 +106,7 @@ const formatTime = (seconds: number): string => {
 
 export const exportUserTestHistory = (userName: string, testHistory: TestResult[]) => {
   const doc = new jsPDF();
+  configurePDFForUnicode(doc);
   
   // Add branding header
   addBrandingHeader(doc, `Test History Report - ${userName}`);
@@ -185,6 +193,7 @@ export const exportUserTestHistory = (userName: string, testHistory: TestResult[
 
 export const exportTopUsersByDate = async (date: string, topUsers: TopUser[], testTitle?: string) => {
   const doc = new jsPDF();
+  configurePDFForUnicode(doc);
   
   const reportTitle = testTitle 
     ? `Top Users - ${testTitle}` 
@@ -204,10 +213,11 @@ export const exportTopUsersByDate = async (date: string, topUsers: TopUser[], te
   doc.text(`Report Generated: ${new Date().toLocaleString()}`, 15, 58);
   doc.text('Qualification: 85%+ accuracy AND (10+ minutes OR 400+ words)', 15, 64);
   
-  // Prepare table data with date and language columns
+  // Prepare table data with test title, date and language columns
   const tableData = topUsers.map((user, index) => [
     (index + 1).toString(),
     user.display_name,
+    user.test_title || 'N/A',
     Number(user.wpm).toFixed(1),
     `${Number(user.accuracy).toFixed(1)}%`,
     formatTime(user.time_taken),
@@ -219,7 +229,7 @@ export const exportTopUsersByDate = async (date: string, topUsers: TopUser[], te
   // Add table
   autoTable(doc, {
     startY: 72,
-    head: [['Rank', 'User Name', 'WPM', 'Accuracy', 'Time Taken', 'Total Words', 'Language', 'Date']],
+    head: [['Rank', 'User Name', 'Test Title', 'WPM', 'Accuracy', 'Time', 'Words', 'Lang', 'Date']],
     body: tableData,
     theme: 'striped',
     headStyles: {
@@ -236,14 +246,15 @@ export const exportTopUsersByDate = async (date: string, topUsers: TopUser[], te
       fillColor: [248, 250, 252]
     },
     columnStyles: {
-      0: { cellWidth: 18, halign: 'center' },
-      1: { cellWidth: 45 },
-      2: { cellWidth: 20, halign: 'center' },
-      3: { cellWidth: 20, halign: 'center' },
-      4: { cellWidth: 24, halign: 'center' },
-      5: { cellWidth: 24, halign: 'center' },
-      6: { cellWidth: 20, halign: 'center' },
-      7: { cellWidth: 22, halign: 'center' }
+      0: { cellWidth: 15, halign: 'center' },
+      1: { cellWidth: 35 },
+      2: { cellWidth: 30 },
+      3: { cellWidth: 18, halign: 'center' },
+      4: { cellWidth: 18, halign: 'center' },
+      5: { cellWidth: 18, halign: 'center' },
+      6: { cellWidth: 16, halign: 'center' },
+      7: { cellWidth: 15, halign: 'center' },
+      8: { cellWidth: 20, halign: 'center' }
     }
   });
   
@@ -259,6 +270,7 @@ export const exportTopUsersByDate = async (date: string, topUsers: TopUser[], te
 
 export const exportAllTimeTopUsers = (topUsers: TopUser[]) => {
   const doc = new jsPDF();
+  configurePDFForUnicode(doc);
   
   // Add branding header
   addBrandingHeader(doc, 'All-Time Top Users');
@@ -274,10 +286,11 @@ export const exportAllTimeTopUsers = (topUsers: TopUser[]) => {
   doc.text(`Report Generated: ${new Date().toLocaleString()}`, 15, 58);
   doc.text('Qualification: 85%+ accuracy AND (10+ minutes OR 400+ words)', 15, 64);
   
-  // Prepare table data with date and language
+  // Prepare table data with test title, date and language
   const tableData = topUsers.map((user, index) => [
     (index + 1).toString(),
     user.display_name,
+    user.test_title || 'N/A',
     Number(user.wpm).toFixed(1),
     `${Number(user.accuracy).toFixed(1)}%`,
     formatTime(user.time_taken),
@@ -289,7 +302,7 @@ export const exportAllTimeTopUsers = (topUsers: TopUser[]) => {
   // Add table
   autoTable(doc, {
     startY: 72,
-    head: [['Rank', 'User Name', 'WPM', 'Accuracy', 'Time Taken', 'Total Words', 'Language', 'Date']],
+    head: [['Rank', 'User Name', 'Test Title', 'WPM', 'Accuracy', 'Time', 'Words', 'Lang', 'Date']],
     body: tableData,
     theme: 'striped',
     headStyles: {
@@ -306,14 +319,15 @@ export const exportAllTimeTopUsers = (topUsers: TopUser[]) => {
       fillColor: [248, 250, 252]
     },
     columnStyles: {
-      0: { cellWidth: 18, halign: 'center' },
-      1: { cellWidth: 45 },
-      2: { cellWidth: 20, halign: 'center' },
-      3: { cellWidth: 20, halign: 'center' },
-      4: { cellWidth: 24, halign: 'center' },
-      5: { cellWidth: 24, halign: 'center' },
-      6: { cellWidth: 20, halign: 'center' },
-      7: { cellWidth: 22, halign: 'center' }
+      0: { cellWidth: 15, halign: 'center' },
+      1: { cellWidth: 35 },
+      2: { cellWidth: 30 },
+      3: { cellWidth: 18, halign: 'center' },
+      4: { cellWidth: 18, halign: 'center' },
+      5: { cellWidth: 18, halign: 'center' },
+      6: { cellWidth: 16, halign: 'center' },
+      7: { cellWidth: 15, halign: 'center' },
+      8: { cellWidth: 20, halign: 'center' }
     }
   });
   
@@ -326,6 +340,7 @@ export const exportAllTimeTopUsers = (topUsers: TopUser[]) => {
 
 export const exportPerTestTopUsers = (testTitle: string, testContent: string, topUsers: TopUser[]) => {
   const doc = new jsPDF();
+  configurePDFForUnicode(doc);
   
   // Add branding header
   addBrandingHeader(doc, `Top Users - ${testTitle}`);

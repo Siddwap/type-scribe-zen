@@ -493,7 +493,7 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
       const { data, error } = await supabase.rpc('get_leaderboard', { p_test_id: null });
       if (error) throw error;
       
-      // Fetch additional data (completed_at and language) for each result
+      // Fetch additional data (completed_at, language, and test_title) for each result
       if (data && data.length > 0) {
         const resultIds = data.map((item: any) => item.result_id);
         const { data: additionalData, error: additionalError } = await supabase
@@ -501,7 +501,7 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
           .select(`
             id,
             completed_at,
-            typing_tests!inner(language)
+            typing_tests!inner(language, title)
           `)
           .in('id', resultIds);
         
@@ -512,7 +512,8 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
             return {
               ...item,
               completed_at: additional?.completed_at,
-              language: additional?.typing_tests?.language || 'english'
+              language: additional?.typing_tests?.language || 'english',
+              test_title: additional?.typing_tests?.title || 'Unknown Test'
             };
           });
         }
@@ -530,7 +531,7 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
       const { data, error } = await supabase.rpc('get_leaderboard', { p_test_id: selectedTestForReport });
       if (error) throw error;
       
-      // Fetch additional data (completed_at and language) for each result
+      // Fetch additional data (completed_at, language, and title) for each result
       if (data && data.length > 0) {
         const resultIds = data.map((item: any) => item.result_id);
         const { data: additionalData, error: additionalError } = await supabase
@@ -538,7 +539,7 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
           .select(`
             id,
             completed_at,
-            typing_tests!inner(language)
+            typing_tests!inner(language, title)
           `)
           .in('id', resultIds);
         
@@ -549,7 +550,8 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
             return {
               ...item,
               completed_at: additional?.completed_at,
-              language: additional?.typing_tests?.language || 'english'
+              language: additional?.typing_tests?.language || 'english',
+              test_title: additional?.typing_tests?.title || 'Unknown Test'
             };
           });
         }
@@ -661,10 +663,10 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
         throw profileError;
       }
 
-      // Fetch test details for languages
+      // Fetch test details for languages and titles
       const { data: testData, error: testError } = await supabase
         .from('typing_tests')
-        .select('id, language')
+        .select('id, language, title')
         .in('id', testIds);
 
       if (testError) {
@@ -676,8 +678,8 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
       const profileMap = new Map(
         profileData?.map((profile: any) => [profile.id, profile]) || []
       );
-      const testLanguageMap = new Map(
-        testData?.map((test: any) => [test.id, test.language]) || []
+      const testMap = new Map(
+        testData?.map((test: any) => [test.id, test]) || []
       );
 
       // Filter and format the data
@@ -688,6 +690,7 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
         )
         .map((result: any) => {
           const profile = profileMap.get(result.user_id);
+          const test = testMap.get(result.test_id);
           return {
             result_id: result.id,
             user_id: result.user_id,
@@ -696,7 +699,8 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
             time_taken: result.time_taken,
             total_words: result.total_words || 0,
             completed_at: result.completed_at,
-            language: testLanguageMap.get(result.test_id) || 'english',
+            language: test?.language || 'english',
+            test_title: test?.title || 'Unknown Test',
             display_name: profile?.full_name || 
                          profile?.email?.split('@')[0] || 
                          'Anonymous'
