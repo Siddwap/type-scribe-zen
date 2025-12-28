@@ -8,13 +8,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Clock, Target, Zap, XCircle, RotateCcw, Settings, Keyboard, FileText, Calendar as CalendarIcon } from 'lucide-react';
+import { Clock, Target, Zap, XCircle, RotateCcw, Settings, Keyboard, FileText, Calendar as CalendarIcon, GraduationCap } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import CustomTextTest from './CustomTextTest';
 import { format } from 'date-fns';
 import { processText } from '@/utils/textNormalization';
+import { compareWords, ComparisonResult } from '@/utils/wordComparison';
+import UPPoliceResults from './UPPoliceResults';
 
 interface TypingTest {
   id: string;
@@ -68,6 +70,10 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [isLoadingDailyTests, setIsLoadingDailyTests] = useState(false);
   const [dailyTests, setDailyTests] = useState<any[]>([]);
+  const [selectedExamType, setSelectedExamType] = useState<'all_exam' | 'up_police'>('all_exam');
+  const [upPoliceResult, setUpPoliceResult] = useState<any>(null);
+  const [upPoliceComparison, setUpPoliceComparison] = useState<ComparisonResult | null>(null);
+  const [backspaceCount, setBackspaceCount] = useState(0);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const displayRef = useRef<HTMLDivElement>(null);
@@ -320,6 +326,9 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     setTypedKeystrokes(0);
     setCorrectKeystrokes(0);
     setShowSettings(true);
+    setBackspaceCount(0);
+    setUpPoliceResult(null);
+    setUpPoliceComparison(null);
     if (selectedTest) {
       setTimeLeft(selectedTest.time_limit);
       const totalChars = selectedTest.content.length;
@@ -366,6 +375,11 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     
     if (isActive) {
       setTypedKeystrokes(prev => prev + 1);
+      
+      // Track backspace for UP Police exam
+      if (e.key === 'Backspace') {
+        setBackspaceCount(prev => prev + 1);
+      }
     }
 
     if (e.key === ' ') {
@@ -466,6 +480,97 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
       finalTypedWords.push(currentTypingWord);
     }
     
+    const originalText = words.join(' ');
+    const typedText = userInput + (currentTypingWord ? ' ' + currentTypingWord : '');
+    
+    // Handle UP Police exam mode
+    if (selectedExamType === 'up_police') {
+      const comparisonResult = compareWords(originalText, typedText.trim());
+      const { stats } = comparisonResult;
+      
+      const timeInMinutes = timeTaken / 60;
+      const actualTypedWords = comparisonResult.typedComparison.filter(item => item.status !== 'skipped').length;
+      const grossSpeed = timeInMinutes > 0 ? actualTypedWords / timeInMinutes : 0;
+      const netSpeed = timeInMinutes > 0 ? stats.correctWords / timeInMinutes : 0;
+      
+      const mm = Math.floor(timeTaken / 60);
+      const ss = Math.floor(timeTaken % 60);
+      
+      const isHindi = selectedTest?.language?.toLowerCase() === 'hindi';
+      const minSpeed = isHindi ? 25 : 30;
+      const isQualified = stats.accuracy >= 85 && grossSpeed >= minSpeed;
+      
+      const upPoliceResultData = {
+        testName: selectedTest?.title || 'Unknown Test',
+        language: selectedTest?.language === 'hindi' ? 'Hindi' : 'English',
+        grossSpeed,
+        netSpeed,
+        accuracy: stats.accuracy,
+        timeTaken: `${mm.toString().padStart(2, '0')}:${ss.toString().padStart(2, '0')}`,
+        totalWords: stats.totalWords,
+        wordsTyped: actualTypedWords,
+        correctWords: stats.correctWords,
+        wrongWords: stats.totalErrors,
+        totalKeystrokes: originalText.length,
+        typedKeystrokes: typedText.length,
+        backspaceCount
+      };
+      
+      setUpPoliceResult(upPoliceResultData);
+      setUpPoliceComparison(comparisonResult);
+      
+      // Save results to database
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user && selectedTest && selectedTest.id !== 'custom-text') {
+          const { error: insertError } = await supabase.from('test_results').insert([{
+            user_id: user.id,
+            test_id: selectedTest.id,
+            wpm: Math.round(netSpeed),
+            gross_wpm: Math.round(grossSpeed),
+            accuracy: stats.accuracy,
+            total_words: stats.totalWords,
+            typed_words: actualTypedWords,
+            correct_words_count: stats.correctWords,
+            incorrect_words: stats.wrongWords,
+            total_keystrokes: originalText.length,
+            correct_keystrokes: typedText.length,
+            wrong_keystrokes: 0,
+            errors: stats.totalErrors,
+            time_taken: Math.round(timeTaken),
+            exam_type: 'up_police',
+            skipped_words: stats.skippedWords,
+            extra_words: stats.extraWords,
+            gross_speed: grossSpeed,
+            net_speed: netSpeed,
+            backspace_count: backspaceCount,
+            is_qualified: isQualified
+          }]);
+          
+          if (insertError) {
+            console.error('Error saving UP Police results:', insertError);
+            toast({
+              title: "Error saving results",
+              description: "Your results couldn't be saved. Please try again.",
+              variant: "destructive"
+            });
+          } else {
+            toast({
+              title: "Results saved!",
+              description: isQualified 
+                ? "🎉 You have QUALIFIED the UP Police typing test!" 
+                : "Test results saved. Keep practicing!",
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error saving UP Police results:', error);
+      }
+      
+      return;
+    }
+    
+    // Standard exam mode
     const totalTypedChars = finalTypedWords.join('').length;
     const correctWords = finalTypedWords.filter((word, index) => word === words[index]).length;
     const incorrectWords = finalTypedWords.length - correctWords;
@@ -522,7 +627,9 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
           correct_keystrokes: results.correctKeystrokes,
           wrong_keystrokes: wrongKeystrokes,
           errors: results.errors,
-          time_taken: results.timeTaken
+          time_taken: results.timeTaken,
+          exam_type: 'all_exam',
+          backspace_count: backspaceCount
         }]);
         
         if (insertError) {
@@ -556,7 +663,7 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     }
     
     onComplete(results);
-  }, [isFinished, startTime, userInput, words, totalKeystrokes, typedKeystrokes, correctKeystrokes, selectedTest, onComplete, wrongWords, currentWordIndex]);
+  }, [isFinished, startTime, userInput, words, totalKeystrokes, typedKeystrokes, correctKeystrokes, selectedTest, onComplete, wrongWords, currentWordIndex, selectedExamType, backspaceCount, currentTypingWord, typedWordsArray]);
 
   const renderText = () => {
     if (!selectedTest) return null;
@@ -612,10 +719,23 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
   const wpm = startTime && correctKeystrokes > 0 ? 
     Math.round(((correctKeystrokes / 5) / ((Date.now() - startTime.getTime()) / 1000 / 60))) : 0;
 
+  // UP Police Results Display
+  if (upPoliceResult && upPoliceComparison && selectedTest) {
+    return (
+      <UPPoliceResults
+        result={upPoliceResult}
+        comparison={upPoliceComparison}
+        originalText={selectedTest.content}
+        testDuration={selectedTest.time_limit}
+        onStartNewTest={resetTest}
+      />
+    );
+  }
+
   // Custom Text Mode
   if (customTextMode) {
     return (
-      <CustomTextTest 
+      <CustomTextTest
         onStartTest={async (testId) => {
           // Fetch the newly created test from database
           const { data: test, error } = await supabase
@@ -1105,7 +1225,39 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
               </CardContent>
             </Card>
 
-            <Button 
+            {/* Exam Type Selection */}
+            <Card className="border-primary/20">
+              <CardContent className="p-4 space-y-4">
+                <h3 className="font-bold text-lg flex items-center gap-2 text-primary">
+                  <GraduationCap className="h-5 w-5" />
+                  Choose Exam
+                </h3>
+                <div className="space-y-2">
+                  <Label htmlFor="exam-type" className="font-medium">
+                    Exam Type
+                  </Label>
+                  <Select
+                    value={selectedExamType}
+                    onValueChange={(value: 'all_exam' | 'up_police') => setSelectedExamType(value)}
+                  >
+                    <SelectTrigger className="border-2">
+                      <SelectValue placeholder="Select exam type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all_exam">📝 All Exam (Standard)</SelectItem>
+                      <SelectItem value="up_police">🚔 UP Police SI/ASI, Computer Operator</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedExamType === 'up_police' 
+                      ? 'Uses UP Police exam rules: 85% accuracy + min speed (30 WPM English / 25 WPM Hindi) required' 
+                      : 'Standard typing test with keystroke-based accuracy'}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Button
               onClick={startTest} 
               size="lg" 
               className="w-full text-lg h-14 shadow-lg hover:shadow-xl transition-all"

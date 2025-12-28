@@ -83,14 +83,21 @@ export type Database = {
       test_results: {
         Row: {
           accuracy: number
+          backspace_count: number | null
           completed_at: string | null
           correct_keystrokes: number
           correct_words_count: number
           created_at: string | null
           errors: number | null
+          exam_type: string | null
+          extra_words: number | null
+          gross_speed: number | null
           gross_wpm: number | null
           id: string
           incorrect_words: number
+          is_qualified: boolean | null
+          net_speed: number | null
+          skipped_words: number | null
           test_id: string
           time_taken: number
           total_keystrokes: number | null
@@ -102,14 +109,21 @@ export type Database = {
         }
         Insert: {
           accuracy: number
+          backspace_count?: number | null
           completed_at?: string | null
           correct_keystrokes?: number
           correct_words_count?: number
           created_at?: string | null
           errors?: number | null
+          exam_type?: string | null
+          extra_words?: number | null
+          gross_speed?: number | null
           gross_wpm?: number | null
           id?: string
           incorrect_words?: number
+          is_qualified?: boolean | null
+          net_speed?: number | null
+          skipped_words?: number | null
           test_id: string
           time_taken: number
           total_keystrokes?: number | null
@@ -121,14 +135,21 @@ export type Database = {
         }
         Update: {
           accuracy?: number
+          backspace_count?: number | null
           completed_at?: string | null
           correct_keystrokes?: number
           correct_words_count?: number
           created_at?: string | null
           errors?: number | null
+          exam_type?: string | null
+          extra_words?: number | null
+          gross_speed?: number | null
           gross_wpm?: number | null
           id?: string
           incorrect_words?: number
+          is_qualified?: boolean | null
+          net_speed?: number | null
+          skipped_words?: number | null
           test_id?: string
           time_taken?: number
           total_keystrokes?: number | null
