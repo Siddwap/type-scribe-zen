@@ -729,8 +729,31 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     return `${hh.toString().padStart(2, '0')}:${mm.toString().padStart(2, '0')}:${ss.toString().padStart(2, '0')}`;
   };
 
+  // UP Police highlight method (as in provided reference file)
+  const getUPPoliceHighlightedText = () => {
+    if (!selectedTest) return '';
+
+    const wordsArr = selectedTest.content.split(' ');
+    const typedWords = upPoliceTypedText.trim().split(' ').filter(w => w.length > 0);
+    const typedLen = typedWords.length;
+
+    let html = '';
+    if (typedLen > 0) {
+      html = '<span style="color: hsl(var(--up-police-typed-color));">';
+    }
+
+    wordsArr.forEach((word, index) => {
+      html += word + ' ';
+      if (typedLen === index + 1) {
+        html += '</span>';
+      }
+    });
+
+    return html;
+  };
+
   const progress = selectedTest ? ((currentWordIndex + (userInput.split(' ')[currentWordIndex]?.length || 0) / (words[currentWordIndex]?.length || 1)) / words.length) * 100 : 0;
-  const wpm = startTime && correctKeystrokes > 0 ? 
+  const wpm = startTime && correctKeystrokes > 0 ?
     Math.round(((correctKeystrokes / 5) / ((Date.now() - startTime.getTime()) / 1000 / 60))) : 0;
 
 
@@ -801,6 +824,13 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     setUpPoliceComparison(comparisonResult);
     setIsActive(false);
     setUpPoliceTestStarted(false);
+
+    // Exit fullscreen (as in provided reference file)
+    try {
+      document.exitFullscreen?.();
+    } catch (e) {
+      console.log('Exit fullscreen not supported');
+    }
     
     // Save results to database
     try {
@@ -858,14 +888,18 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     setStartTime(new Date());
     setUpPoliceTypedText('');
     setBackspaceCount(0);
-    
-    // Focus textarea after a short delay
-    setTimeout(() => {
-      if (textareaRef.current) {
-        textareaRef.current.disabled = false;
-        textareaRef.current.focus();
-      }
-    }, 100);
+
+    if (textareaRef.current) {
+      textareaRef.current.disabled = false;
+      textareaRef.current.focus();
+    }
+
+    // Request fullscreen (as in provided reference file)
+    try {
+      document.documentElement.requestFullscreen?.();
+    } catch (e) {
+      console.log('Fullscreen not supported');
+    }
   };
 
   // UP Police timer effect
@@ -894,141 +928,122 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     );
   }
 
-  // UP Police Typing Test Interface - Fullscreen that hides site header
+  // UP Police Typing Test Interface (match provided reference UI + hide site header)
   if (selectedExamType === 'up_police' && !showSettings && selectedTest && !upPoliceResult) {
     return (
-      <div className="up-police-fullscreen" onContextMenu={(e) => e.preventDefault()}>
-        {/* UP Police Header Bar */}
-        <div className="up-police-header-bar">
-          {/* Logo and title */}
-          <div className="flex items-center gap-3">
-            <img 
-              src={ntaLogo} 
-              alt="UP Police Logo" 
-              className="h-14 w-14 lg:h-16 lg:w-16 rounded-full bg-white p-0.5 object-contain" 
+      <div className="up-police-fullscreen up-police-theme" onContextMenu={(e) => e.preventDefault()}>
+        <div className="min-h-screen bg-background flex flex-col">
+          {/* Header - Compact for mobile landscape */}
+          <div className="header-bar p-1 sm:p-2 shrink-0">
+            <div className="flex items-center justify-between gap-2 sm:gap-4">
+              {/* Logo and title - compact on mobile */}
+              <div className="flex items-center gap-1 sm:gap-4">
+                <img src={ntaLogo} alt="NTA Logo" className="h-8 sm:h-16 lg:h-24" />
+                <div className="hidden sm:block">
+                  <h1 className="text-sm sm:text-xl lg:text-3xl font-bold drop-shadow-lg">
+                    {selectedTest.language === 'hindi' ? 'Hindi' : 'English'} Typing Test
+                  </h1>
+                  <span className="text-xs sm:text-sm">Exam Center : UPSI-LUCKNOW</span>
+                </div>
+                <span className="sm:hidden text-xs font-bold">{selectedTest.language === 'hindi' ? 'Hindi' : 'English'}</span>
+              </div>
+
+              {/* Timer - always visible and prominent */}
+              <div className="text-sm sm:text-xl lg:text-2xl font-bold drop-shadow-lg text-center bg-background/80 px-2 py-1 rounded">
+                {upPoliceTestStarted ? formatTimeHMS(timeLeft) : formatTimeHMS(selectedTest.time_limit)}
+              </div>
+
+              {/* User info - hidden on mobile landscape, shown on larger screens */}
+              <div className="hidden md:flex items-center gap-2 sm:gap-4">
+                <div className="h-10 w-10 lg:h-20 lg:w-20 rounded-xl lg:rounded-2xl border border-border bg-background flex items-center justify-center">
+                  <span className="text-2xl lg:text-4xl">👤</span>
+                </div>
+                <div className="text-xs lg:text-sm drop-shadow-lg">
+                  <p>Reg No : 10001</p>
+                  <p>Name : Candidate</p>
+                  <p className="hidden lg:block">Father's Name : Father</p>
+                  <p className="hidden lg:block">Date : {new Date().toLocaleDateString()}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Content - Flexible height for mobile landscape */}
+          <div className="flex-1 flex flex-col p-2 sm:p-4 max-w-7xl mx-auto w-full min-h-0 overflow-hidden">
+            {/* Font size controls and sound toggle */}
+            <div className="flex items-center gap-2 mb-2 shrink-0 flex-wrap">
+              <button
+                onClick={() => setUpPoliceFontSize(16)}
+                className="text-xs sm:text-sm font-medium bg-primary text-primary-foreground px-2 py-1 rounded hover:bg-primary/90"
+                title="Reset to default font size"
+              >
+                Default Font
+              </button>
+              <button
+                onClick={() => setUpPoliceFontSize(prev => Math.min(prev + 2, 32))}
+                className="bg-primary text-primary-foreground p-1 rounded hover:bg-primary/90"
+                title="Increase font size"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setUpPoliceFontSize(prev => Math.max(prev - 2, 12))}
+                className="bg-primary text-primary-foreground p-1 rounded hover:bg-primary/90"
+                title="Decrease font size"
+              >
+                <Minus className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setUpPoliceSoundEnabled(!upPoliceSoundEnabled)}
+                className={`p-1 rounded transition-colors ${upPoliceSoundEnabled ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+                title={upPoliceSoundEnabled ? 'Turn off sound' : 'Turn on sound'}
+              >
+                {upPoliceSoundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+              </button>
+            </div>
+
+            {/* Content box - scrollable, takes available space */}
+            <div
+              className="content-box flex-1 min-h-[80px] sm:min-h-[120px] max-h-[30vh] sm:max-h-[40vh] lg:max-h-[50vh] overflow-y-auto mb-2 sm:mb-4"
+              style={{
+                fontSize: `${upPoliceFontSize}px`,
+                fontFamily: selectedTest.language === 'hindi' ? 'Mangal, "Noto Sans Devanagari", sans-serif' : 'inherit'
+              }}
+              dangerouslySetInnerHTML={{ __html: getUPPoliceHighlightedText() }}
             />
-            <div>
-              <h1 className="text-lg lg:text-xl font-bold">
-                {selectedTest.language === 'hindi' ? 'Hindi' : 'English'} Typing Test
-              </h1>
-              <p className="text-xs lg:text-sm opacity-90">Exam Center : UPSI-LUCKNOW</p>
+
+            {/* Textarea - compact on mobile landscape */}
+            <textarea
+              ref={textareaRef}
+              value={upPoliceTypedText}
+              onChange={handleUPPoliceTextChange}
+              onKeyDown={handleUPPoliceKeyDown}
+              onPaste={(e) => e.preventDefault()}
+              onCopy={(e) => e.preventDefault()}
+              onDrop={(e) => e.preventDefault()}
+              disabled={!upPoliceTestStarted}
+              spellCheck={false}
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              style={{
+                fontSize: `${upPoliceFontSize}px`,
+                fontFamily: selectedTest.language === 'hindi' ? 'Mangal, "Noto Sans Devanagari", sans-serif' : 'inherit'
+              }}
+              className="typing-textarea border border-border w-full resize-none flex-shrink-0 h-20 sm:h-28 lg:h-32"
+              placeholder={upPoliceTestStarted ? 'Start typing here...' : 'Click Start to begin typing'}
+            />
+
+            {/* Button - compact on mobile */}
+            <div className="text-center mt-2 sm:mt-4 shrink-0">
+              <Button
+                size="lg"
+                className="text-base sm:text-xl lg:text-2xl px-4 sm:px-6 lg:px-8 py-2 sm:py-4 lg:py-6"
+                onClick={upPoliceTestStarted ? handleUPPoliceSubmit : handleUPPoliceStart}
+              >
+                {upPoliceTestStarted ? 'Submit' : 'Start'}
+              </Button>
             </div>
-          </div>
-          
-          {/* Timer */}
-          <div className="up-police-timer">
-            {upPoliceTestStarted ? formatTimeHMS(timeLeft) : formatTimeHMS(selectedTest.time_limit)}
-          </div>
-          
-          {/* User info */}
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 lg:h-14 lg:w-14 rounded-full border-2 border-white/50 bg-gray-200 flex items-center justify-center overflow-hidden">
-              <span className="text-2xl lg:text-3xl">👤</span>
-            </div>
-            <div className="up-police-user-info">
-              <p>Reg No : 10001</p>
-              <p>Name : Candidate</p>
-              <p>Father's Name : Father</p>
-              <p>Date : {new Date().toLocaleDateString('en-GB')}</p>
-            </div>
-          </div>
-        </div>
-        
-        {/* Font controls bar */}
-        <div className="up-police-controls">
-          <button 
-            onClick={() => setUpPoliceFontSize(16)}
-            className="up-police-font-btn"
-          >
-            Default Font
-          </button>
-          <button 
-            onClick={() => setUpPoliceFontSize(prev => Math.min(prev + 2, 32))}
-            className="up-police-font-btn flex items-center justify-center"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
-          <button 
-            onClick={() => setUpPoliceFontSize(prev => Math.max(prev - 2, 12))}
-            className="up-police-font-btn flex items-center justify-center"
-          >
-            <Minus className="h-4 w-4" />
-          </button>
-          <button 
-            onClick={() => setUpPoliceSoundEnabled(!upPoliceSoundEnabled)}
-            className="up-police-font-btn flex items-center justify-center"
-          >
-            {upPoliceSoundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-            <span className="ml-1 text-xs">{upPoliceSoundEnabled ? '' : '×'}</span>
-          </button>
-          <button 
-            onClick={resetTest}
-            className="up-police-font-btn flex items-center gap-1 ml-auto"
-          >
-            <RotateCcw className="h-4 w-4" />
-            Back
-          </button>
-        </div>
-        
-        {/* Main content area */}
-        <div className="p-4">
-          {/* Original text display */}
-          <div 
-            className="up-police-content-box"
-            style={{ 
-              fontSize: `${upPoliceFontSize}px`,
-              fontFamily: selectedTest.language === 'hindi' ? 'Mangal, "Noto Sans Devanagari", sans-serif' : 'inherit'
-            }}
-          >
-            {selectedTest.content.split(' ').map((word, index) => {
-              const typedWords = upPoliceTypedText.trim().split(' ').filter(w => w.length > 0);
-              const typedLen = typedWords.length;
-              
-              let className = 'up-police-word-pending';
-              if (index < typedLen) {
-                className = typedWords[index] === word ? 'up-police-word-correct' : 'up-police-word-wrong';
-              } else if (index === typedLen && upPoliceTestStarted) {
-                className = 'up-police-word-current';
-              }
-              
-              return (
-                <span key={index} className={className}>
-                  {word}{' '}
-                </span>
-              );
-            })}
-          </div>
-          
-          {/* Typing textarea */}
-          <textarea
-            ref={textareaRef}
-            value={upPoliceTypedText}
-            onChange={handleUPPoliceTextChange}
-            onKeyDown={handleUPPoliceKeyDown}
-            onPaste={(e) => e.preventDefault()}
-            onCopy={(e) => e.preventDefault()}
-            onDrop={(e) => e.preventDefault()}
-            disabled={!upPoliceTestStarted}
-            spellCheck={false}
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            style={{ 
-              fontSize: `${upPoliceFontSize}px`,
-              fontFamily: selectedTest.language === 'hindi' ? 'Mangal, "Noto Sans Devanagari", sans-serif' : 'inherit'
-            }}
-            className="up-police-textarea"
-            placeholder={upPoliceTestStarted ? 'Start typing here...' : 'Click Start to begin typing...'}
-          />
-          
-          {/* Submit button */}
-          <div className="text-center mt-4">
-            <button 
-              className="up-police-submit-btn"
-              onClick={upPoliceTestStarted ? handleUPPoliceSubmit : handleUPPoliceStart}
-            >
-              {upPoliceTestStarted ? 'Submit' : 'Start'}
-            </button>
           </div>
         </div>
       </div>
