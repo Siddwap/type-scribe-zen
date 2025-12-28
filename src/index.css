@@ -88,6 +88,12 @@
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
+  
+  /* UP Police Exam specific colors */
+  .up-police-header {
+    --up-police-bg: 210 100% 35%;
+    --up-police-text: 0 0% 100%;
+  }
 }
 
 @layer base {
@@ -98,4 +104,75 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* UP Police Typing Test Styles */
+.up-police-header-bar {
+  background: linear-gradient(135deg, hsl(210, 100%, 35%) 0%, hsl(210, 100%, 25%) 100%);
+  color: white;
+}
+
+.up-police-content-box {
+  background-color: hsl(0, 0%, 100%);
+  border: 2px solid hsl(210, 20%, 80%);
+  border-radius: 0.5rem;
+  padding: 1rem 1.5rem;
+  line-height: 1.8;
+}
+
+.up-police-textarea {
+  background-color: hsl(0, 0%, 100%);
+  border: 2px solid hsl(210, 20%, 80%);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  resize: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.up-police-textarea:focus {
+  border-color: hsl(210, 100%, 45%);
+  box-shadow: 0 0 0 3px hsla(210, 100%, 45%, 0.2);
+  outline: none;
+}
+
+.up-police-btn {
+  background: linear-gradient(135deg, hsl(210, 100%, 40%) 0%, hsl(210, 100%, 30%) 100%);
+  color: white;
+  font-weight: 600;
+  border-radius: 0.5rem;
+  padding: 0.75rem 2rem;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.up-police-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px hsla(210, 100%, 35%, 0.3);
+}
+
+.up-police-font-btn {
+  background: hsl(210, 100%, 40%);
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.up-police-font-btn:hover {
+  background: hsl(210, 100%, 35%);
+}
+
+.dark .up-police-content-box {
+  background-color: hsl(222, 84%, 8%);
+  border-color: hsl(217, 33%, 25%);
+}
+
+.dark .up-police-textarea {
+  background-color: hsl(222, 84%, 8%);
+  border-color: hsl(217, 33%, 25%);
+  color: hsl(210, 40%, 98%);
+}
+
+.dark .up-police-textarea:focus {
+  border-color: hsl(210, 100%, 55%);
+  box-shadow: 0 0 0 3px hsla(210, 100%, 55%, 0.2);
 }

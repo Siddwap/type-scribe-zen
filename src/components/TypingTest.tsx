@@ -17,7 +17,7 @@ import { format } from 'date-fns';
 import { processText } from '@/utils/textNormalization';
 import { compareWords, ComparisonResult } from '@/utils/wordComparison';
 import UPPoliceResults from './UPPoliceResults';
-import typescribeLogo from '@/assets/typescribe-logo.jpg';
+import ntaLogo from '@/assets/NTA_logo_1.png';
 
 interface TypingTest {
   id: string;
@@ -929,67 +929,68 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
   if (selectedExamType === 'up_police' && !showSettings && selectedTest && !upPoliceResult) {
     return (
       <div className="min-h-screen bg-background flex flex-col" onContextMenu={(e) => e.preventDefault()}>
-        {/* Header - Compact for mobile landscape */}
-        <div className="bg-primary text-primary-foreground p-1 sm:p-2 shrink-0">
+        {/* UP Police Header */}
+        <div className="up-police-header-bar p-2 sm:p-3 shrink-0">
           <div className="flex items-center justify-between gap-2 sm:gap-4">
-            {/* Logo and title - compact on mobile */}
-            <div className="flex items-center gap-1 sm:gap-4">
-              <img src={typescribeLogo} alt="TypeScribe Logo" className="h-8 sm:h-16 lg:h-24 rounded" />
+            {/* Logo and title */}
+            <div className="flex items-center gap-2 sm:gap-4">
+              <img src={ntaLogo} alt="NTA Logo" className="h-10 sm:h-16 lg:h-20 bg-white rounded-full p-1" />
               <div className="hidden sm:block">
-                <h1 className="text-sm sm:text-xl lg:text-3xl font-bold drop-shadow-lg">
+                <h1 className="text-sm sm:text-xl lg:text-2xl font-bold">
                   {selectedTest.language === 'hindi' ? 'हिंदी' : 'English'} Typing Test
                 </h1>
-                <span className="text-xs sm:text-sm">UP Police SI/ASI - Computer Operator</span>
+                <span className="text-xs sm:text-sm opacity-90">Exam Center: UPSI-LUCKNOW</span>
               </div>
               <span className="sm:hidden text-xs font-bold">{selectedTest.language === 'hindi' ? 'हिंदी' : 'English'}</span>
             </div>
             
-            {/* Timer - always visible and prominent */}
-            <div className="text-sm sm:text-xl lg:text-2xl font-bold drop-shadow-lg text-center bg-background/20 px-2 py-1 rounded">
+            {/* Timer */}
+            <div className="text-sm sm:text-xl lg:text-2xl font-bold text-center bg-white/20 backdrop-blur-sm px-3 py-1 rounded-lg">
               {upPoliceTestStarted ? formatTimeHMS(timeLeft) : formatTimeHMS(selectedTest.time_limit)}
             </div>
             
-            {/* User info - hidden on mobile landscape, shown on larger screens */}
-            <div className="hidden md:flex items-center gap-2 sm:gap-4">
-              <div className="h-10 w-10 lg:h-16 lg:w-16 rounded-xl lg:rounded-2xl border border-primary-foreground/20 bg-primary-foreground/10 flex items-center justify-center">
-                <span className="text-lg lg:text-2xl">👤</span>
+            {/* User info */}
+            <div className="hidden md:flex items-center gap-3">
+              <div className="h-12 w-12 lg:h-16 lg:w-16 rounded-full border-2 border-white/30 bg-white/10 flex items-center justify-center">
+                <span className="text-xl lg:text-2xl">👤</span>
               </div>
-              <div className="text-xs lg:text-sm drop-shadow-lg">
-                <p>Test: {selectedTest.title}</p>
-                <p>Date: {new Date().toLocaleDateString()}</p>
+              <div className="text-xs lg:text-sm">
+                <p>Reg No: 11722</p>
+                <p>Name: Candidate</p>
+                <p className="hidden lg:block">Date: {new Date().toLocaleDateString()}</p>
               </div>
             </div>
           </div>
         </div>
         
-        {/* Content - Flexible height for mobile landscape */}
-        <div className="flex-1 flex flex-col p-2 sm:p-4 max-w-7xl mx-auto w-full min-h-0 overflow-hidden">
+        {/* Content */}
+        <div className="flex-1 flex flex-col p-3 sm:p-6 max-w-7xl mx-auto w-full min-h-0 overflow-hidden">
           {/* Font size controls and sound toggle */}
-          <div className="flex items-center gap-2 mb-2 shrink-0 flex-wrap">
+          <div className="flex items-center gap-2 mb-3 shrink-0 flex-wrap">
             <button 
               onClick={() => setUpPoliceFontSize(16)}
-              className="text-xs sm:text-sm font-medium bg-primary text-primary-foreground px-2 py-1 rounded hover:bg-primary/90"
+              className="up-police-font-btn"
               title="Reset to default font size"
             >
               Default Font
             </button>
             <button 
               onClick={() => setUpPoliceFontSize(prev => Math.min(prev + 2, 32))}
-              className="bg-primary text-primary-foreground p-1 rounded hover:bg-primary/90"
+              className="up-police-font-btn"
               title="Increase font size"
             >
               <Plus className="h-4 w-4" />
             </button>
             <button 
               onClick={() => setUpPoliceFontSize(prev => Math.max(prev - 2, 12))}
-              className="bg-primary text-primary-foreground p-1 rounded hover:bg-primary/90"
+              className="up-police-font-btn"
               title="Decrease font size"
             >
               <Minus className="h-4 w-4" />
             </button>
             <button 
               onClick={() => setUpPoliceSoundEnabled(!upPoliceSoundEnabled)}
-              className={`p-1 rounded transition-colors ${upPoliceSoundEnabled ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+              className={`up-police-font-btn ${!upPoliceSoundEnabled && 'opacity-60'}`}
               title={upPoliceSoundEnabled ? 'Turn off sound' : 'Turn on sound'}
             >
               {upPoliceSoundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
@@ -1005,18 +1006,17 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
             </Button>
           </div>
           
-          {/* Content box - scrollable, takes available space */}
+          {/* Content box */}
           <div 
-            className="flex-1 min-h-[80px] sm:min-h-[120px] max-h-[30vh] sm:max-h-[40vh] lg:max-h-[50vh] overflow-y-auto mb-2 sm:mb-4 p-4 sm:p-6 bg-secondary/30 border-2 border-border rounded-lg"
+            className="up-police-content-box flex-1 min-h-[100px] sm:min-h-[150px] max-h-[35vh] sm:max-h-[45vh] overflow-y-auto mb-3 sm:mb-4"
             style={{ 
               fontSize: `${upPoliceFontSize}px`,
-              fontFamily: selectedTest.language === 'hindi' ? 'Mangal, sans-serif' : 'inherit',
-              lineHeight: '1.8'
+              fontFamily: selectedTest.language === 'hindi' ? 'Mangal, "Noto Sans Devanagari", sans-serif' : 'inherit'
             }}
             dangerouslySetInnerHTML={{ __html: getUPPoliceHighlightedText() }}
           />
           
-          {/* Textarea - compact on mobile landscape */}
+          {/* Textarea */}
           <textarea
             ref={textareaRef}
             value={upPoliceTypedText}
@@ -1030,21 +1030,20 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
             autoComplete="off"
             style={{ 
               fontSize: `${upPoliceFontSize}px`,
-              fontFamily: selectedTest.language === 'hindi' ? 'Mangal, sans-serif' : 'inherit'
+              fontFamily: selectedTest.language === 'hindi' ? 'Mangal, "Noto Sans Devanagari", sans-serif' : 'inherit'
             }}
-            className="border-2 border-border bg-background w-full resize-none flex-shrink-0 h-20 sm:h-28 lg:h-32 p-4 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+            className="up-police-textarea w-full flex-shrink-0 h-24 sm:h-32 lg:h-36"
             placeholder={upPoliceTestStarted ? 'Start typing here...' : 'Click Start to begin typing'}
           />
           
-          {/* Button - compact on mobile */}
-          <div className="text-center mt-2 sm:mt-4 shrink-0">
-            <Button 
-              size="lg" 
-              className="text-base sm:text-xl lg:text-2xl px-4 sm:px-6 lg:px-8 py-2 sm:py-4 lg:py-6"
+          {/* Button */}
+          <div className="text-center mt-3 sm:mt-4 shrink-0">
+            <button 
+              className="up-police-btn text-lg sm:text-xl lg:text-2xl px-6 sm:px-8 lg:px-10 py-3 sm:py-4"
               onClick={upPoliceTestStarted ? handleUPPoliceSubmit : handleUPPoliceStart}
             >
               {upPoliceTestStarted ? 'Submit' : 'Start'}
-            </Button>
+            </button>
           </div>
         </div>
       </div>
