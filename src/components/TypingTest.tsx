@@ -79,6 +79,8 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
   const [upPoliceSoundEnabled, setUpPoliceSoundEnabled] = useState(true);
   const [upPoliceTypedText, setUpPoliceTypedText] = useState('');
   const [upPoliceTestStarted, setUpPoliceTestStarted] = useState(false);
+  const [wordLimitEnabled, setWordLimitEnabled] = useState(true);
+  const [wordLimit, setWordLimit] = useState(500);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const displayRef = useRef<HTMLDivElement>(null);
@@ -148,16 +150,31 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     }
   }, [currentTest]);
 
+  // Update word limit default based on language
+  useEffect(() => {
+    if (selectedTest?.language === 'hindi') {
+      setWordLimit(400);
+    } else if (selectedTest?.language === 'english') {
+      setWordLimit(500);
+    }
+  }, [selectedTest?.language]);
+
   useEffect(() => {
     if (selectedTest) {
-      const testWords = selectedTest.content.split(' ');
+      let testWords = selectedTest.content.split(' ');
+      
+      // Apply word limit if enabled
+      if (wordLimitEnabled && testWords.length > wordLimit) {
+        testWords = testWords.slice(0, wordLimit);
+      }
+      
       setWords(testWords);
       setTimeLeft(selectedTest.time_limit);
-      const totalChars = selectedTest.content.length;
+      const totalChars = testWords.join(' ').length;
       setTotalKeystrokes(totalChars);
       resetTest();
     }
-  }, [selectedTest]);
+  }, [selectedTest, wordLimitEnabled, wordLimit]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -902,18 +919,23 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     }
   };
 
-  // UP Police timer effect
+  // UP Police timer effect with auto-submit at exactly 15 minutes
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (upPoliceTestStarted && isActive && timeLeft > 0) {
       timer = setTimeout(() => {
         setTimeLeft(prev => prev - 1);
       }, 1000);
-    } else if (timeLeft === 0 && upPoliceTestStarted && isActive) {
-      handleUPPoliceSubmit();
     }
     return () => clearTimeout(timer);
-  }, [upPoliceTestStarted, isActive, timeLeft, handleUPPoliceSubmit]);
+  }, [upPoliceTestStarted, isActive, timeLeft]);
+
+  // Separate effect for auto-submit when time reaches 0
+  useEffect(() => {
+    if (timeLeft === 0 && upPoliceTestStarted && isActive) {
+      handleUPPoliceSubmit();
+    }
+  }, [timeLeft, upPoliceTestStarted, isActive, handleUPPoliceSubmit]);
 
   // UP Police Results Display
   if (upPoliceResult && upPoliceComparison && selectedTest) {
@@ -1571,6 +1593,54 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
                       ? 'Uses UP Police exam rules: 85% accuracy + min speed (30 WPM English / 25 WPM Hindi) required' 
                       : 'Standard typing test with keystroke-based accuracy'}
                   </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Word Limit Setting */}
+            <Card className="border-primary/20">
+              <CardContent className="p-4 space-y-4">
+                <h3 className="font-bold text-lg flex items-center gap-2 text-primary">
+                  <FileText className="h-5 w-5" />
+                  Set Word Limit
+                </h3>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-6">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="wordLimit"
+                        checked={wordLimitEnabled}
+                        onChange={() => setWordLimitEnabled(true)}
+                        className="w-4 h-4 text-primary accent-primary"
+                      />
+                      <span className="font-medium">Enable</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="wordLimit"
+                        checked={!wordLimitEnabled}
+                        onChange={() => setWordLimitEnabled(false)}
+                        className="w-4 h-4 text-primary accent-primary"
+                      />
+                      <span className="font-medium">Disable</span>
+                    </label>
+                  </div>
+                  {wordLimitEnabled && (
+                    <div className="space-y-2">
+                      <input
+                        type="number"
+                        value={wordLimit}
+                        onChange={(e) => setWordLimit(Math.max(1, parseInt(e.target.value) || 1))}
+                        min="1"
+                        className="w-full max-w-[120px] px-3 py-2 border-2 rounded-lg text-center font-medium focus:ring-2 focus:ring-primary focus:border-transparent"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Default: {selectedTest?.language === 'hindi' ? '400' : '500'} words for {selectedTest?.language === 'hindi' ? 'Hindi' : 'English'}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
