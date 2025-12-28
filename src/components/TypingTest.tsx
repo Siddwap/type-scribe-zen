@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Clock, Target, Zap, XCircle, RotateCcw, Settings, Keyboard, FileText, Calendar as CalendarIcon, GraduationCap } from 'lucide-react';
+import { Clock, Target, Zap, XCircle, RotateCcw, Settings, Keyboard, FileText, Calendar as CalendarIcon, GraduationCap, Plus, Minus, Volume2, VolumeX } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
@@ -17,6 +17,7 @@ import { format } from 'date-fns';
 import { processText } from '@/utils/textNormalization';
 import { compareWords, ComparisonResult } from '@/utils/wordComparison';
 import UPPoliceResults from './UPPoliceResults';
+import typescribeLogo from '@/assets/typescribe-logo.jpg';
 
 interface TypingTest {
   id: string;
@@ -74,6 +75,10 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
   const [upPoliceResult, setUpPoliceResult] = useState<any>(null);
   const [upPoliceComparison, setUpPoliceComparison] = useState<ComparisonResult | null>(null);
   const [backspaceCount, setBackspaceCount] = useState(0);
+  const [upPoliceFontSize, setUpPoliceFontSize] = useState(16);
+  const [upPoliceSoundEnabled, setUpPoliceSoundEnabled] = useState(true);
+  const [upPoliceTypedText, setUpPoliceTypedText] = useState('');
+  const [upPoliceTestStarted, setUpPoliceTestStarted] = useState(false);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const displayRef = useRef<HTMLDivElement>(null);
@@ -329,6 +334,8 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     setBackspaceCount(0);
     setUpPoliceResult(null);
     setUpPoliceComparison(null);
+    setUpPoliceTypedText('');
+    setUpPoliceTestStarted(false);
     if (selectedTest) {
       setTimeLeft(selectedTest.time_limit);
       const totalChars = selectedTest.content.length;
@@ -715,9 +722,195 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     return `${seconds}s`;
   };
 
+  const formatTimeHMS = (seconds: number) => {
+    const hh = Math.floor(seconds / 3600);
+    const mm = Math.floor((seconds % 3600) / 60);
+    const ss = seconds % 60;
+    return `${hh.toString().padStart(2, '0')}:${mm.toString().padStart(2, '0')}:${ss.toString().padStart(2, '0')}`;
+  };
+
   const progress = selectedTest ? ((currentWordIndex + (userInput.split(' ')[currentWordIndex]?.length || 0) / (words[currentWordIndex]?.length || 1)) / words.length) * 100 : 0;
   const wpm = startTime && correctKeystrokes > 0 ? 
     Math.round(((correctKeystrokes / 5) / ((Date.now() - startTime.getTime()) / 1000 / 60))) : 0;
+
+  // Get highlighted text for UP Police interface
+  const getUPPoliceHighlightedText = () => {
+    if (!selectedTest) return '';
+    
+    const originalWords = selectedTest.content.split(' ');
+    const typedWords = upPoliceTypedText.trim().split(' ').filter(w => w.length > 0);
+    const typedLen = typedWords.length;
+    
+    let html = '';
+    if (typedLen > 0) {
+      html = '<span style="color: hsl(var(--primary));">';
+    }
+    
+    originalWords.forEach((word, index) => {
+      html += word + ' ';
+      if (typedLen === index + 1) {
+        html += '</span>';
+      }
+    });
+    
+    return html;
+  };
+
+  // UP Police text input handler
+  const handleUPPoliceTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const rawText = e.target.value;
+    const normalizedText = processText(rawText);
+    setUpPoliceTypedText(normalizedText);
+    
+    if (e.target.value !== normalizedText) {
+      e.target.value = normalizedText;
+    }
+  };
+
+  // UP Police key handler
+  const handleUPPoliceKeyDown = (e: React.KeyboardEvent) => {
+    // Prevent copy/paste
+    if (e.ctrlKey && (e.key === 'c' || e.key === 'v' || e.key === 'u')) {
+      e.preventDefault();
+      return;
+    }
+    
+    if (e.key === 'Backspace') {
+      setBackspaceCount(prev => prev + 1);
+    }
+  };
+
+  // UP Police test submit handler
+  const handleUPPoliceSubmit = useCallback(async () => {
+    if (!startTime || !selectedTest) return;
+    
+    const endTime = Date.now();
+    const timeTaken = (endTime - startTime.getTime()) / 1000;
+    
+    const originalText = selectedTest.content;
+    const comparisonResult = compareWords(originalText, upPoliceTypedText.trim());
+    const { stats } = comparisonResult;
+    
+    const timeInMinutes = timeTaken / 60;
+    const actualTypedWords = comparisonResult.typedComparison.filter(item => item.status !== 'skipped').length;
+    const grossSpeed = timeInMinutes > 0 ? actualTypedWords / timeInMinutes : 0;
+    const netSpeed = timeInMinutes > 0 ? stats.correctWords / timeInMinutes : 0;
+    
+    const mm = Math.floor(timeTaken / 60);
+    const ss = Math.floor(timeTaken % 60);
+    
+    const isHindi = selectedTest.language?.toLowerCase() === 'hindi';
+    const minSpeed = isHindi ? 25 : 30;
+    const isQualified = stats.accuracy >= 85 && grossSpeed >= minSpeed;
+    
+    const upPoliceResultData = {
+      testName: selectedTest.title,
+      language: selectedTest.language === 'hindi' ? 'Hindi' : 'English',
+      grossSpeed,
+      netSpeed,
+      accuracy: stats.accuracy,
+      timeTaken: `${mm.toString().padStart(2, '0')}:${ss.toString().padStart(2, '0')}`,
+      totalWords: stats.totalWords,
+      wordsTyped: actualTypedWords,
+      correctWords: stats.correctWords,
+      wrongWords: stats.totalErrors,
+      totalKeystrokes: originalText.length,
+      typedKeystrokes: upPoliceTypedText.length,
+      backspaceCount
+    };
+    
+    setUpPoliceResult(upPoliceResultData);
+    setUpPoliceComparison(comparisonResult);
+    setIsActive(false);
+    setUpPoliceTestStarted(false);
+    
+    // Exit fullscreen
+    try {
+      document.exitFullscreen?.();
+    } catch (e) {
+      console.log('Exit fullscreen not supported');
+    }
+    
+    // Save results to database
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user && selectedTest && selectedTest.id !== 'custom-text') {
+        const { error: insertError } = await supabase.from('test_results').insert([{
+          user_id: user.id,
+          test_id: selectedTest.id,
+          wpm: Math.round(netSpeed),
+          gross_wpm: Math.round(grossSpeed),
+          accuracy: stats.accuracy,
+          total_words: stats.totalWords,
+          typed_words: actualTypedWords,
+          correct_words_count: stats.correctWords,
+          incorrect_words: stats.wrongWords,
+          total_keystrokes: originalText.length,
+          correct_keystrokes: upPoliceTypedText.length,
+          wrong_keystrokes: 0,
+          errors: stats.totalErrors,
+          time_taken: Math.round(timeTaken),
+          exam_type: 'up_police',
+          skipped_words: stats.skippedWords,
+          extra_words: stats.extraWords,
+          gross_speed: grossSpeed,
+          net_speed: netSpeed,
+          backspace_count: backspaceCount,
+          is_qualified: isQualified
+        }]);
+        
+        if (insertError) {
+          console.error('Error saving UP Police results:', insertError);
+          toast({
+            title: "Error saving results",
+            description: "Your results couldn't be saved. Please try again.",
+            variant: "destructive"
+          });
+        } else {
+          toast({
+            title: "Results saved!",
+            description: isQualified 
+              ? "🎉 You have QUALIFIED the UP Police typing test!" 
+              : "Test results saved. Keep practicing!",
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error saving UP Police results:', error);
+    }
+  }, [startTime, selectedTest, upPoliceTypedText, backspaceCount]);
+
+  // UP Police start handler
+  const handleUPPoliceStart = () => {
+    setUpPoliceTestStarted(true);
+    setIsActive(true);
+    setStartTime(new Date());
+    setUpPoliceTypedText('');
+    setBackspaceCount(0);
+    if (textareaRef.current) {
+      textareaRef.current.disabled = false;
+      textareaRef.current.focus();
+    }
+    // Request fullscreen
+    try {
+      document.documentElement.requestFullscreen?.();
+    } catch (e) {
+      console.log('Fullscreen not supported');
+    }
+  };
+
+  // UP Police timer effect
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (upPoliceTestStarted && isActive && timeLeft > 0) {
+      timer = setTimeout(() => {
+        setTimeLeft(prev => prev - 1);
+      }, 1000);
+    } else if (timeLeft === 0 && upPoliceTestStarted && isActive) {
+      handleUPPoliceSubmit();
+    }
+    return () => clearTimeout(timer);
+  }, [upPoliceTestStarted, isActive, timeLeft, handleUPPoliceSubmit]);
 
   // UP Police Results Display
   if (upPoliceResult && upPoliceComparison && selectedTest) {
@@ -729,6 +922,132 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
         testDuration={selectedTest.time_limit}
         onStartNewTest={resetTest}
       />
+    );
+  }
+
+  // UP Police Typing Test Interface
+  if (selectedExamType === 'up_police' && !showSettings && selectedTest && !upPoliceResult) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col" onContextMenu={(e) => e.preventDefault()}>
+        {/* Header - Compact for mobile landscape */}
+        <div className="bg-primary text-primary-foreground p-1 sm:p-2 shrink-0">
+          <div className="flex items-center justify-between gap-2 sm:gap-4">
+            {/* Logo and title - compact on mobile */}
+            <div className="flex items-center gap-1 sm:gap-4">
+              <img src={typescribeLogo} alt="TypeScribe Logo" className="h-8 sm:h-16 lg:h-24 rounded" />
+              <div className="hidden sm:block">
+                <h1 className="text-sm sm:text-xl lg:text-3xl font-bold drop-shadow-lg">
+                  {selectedTest.language === 'hindi' ? 'हिंदी' : 'English'} Typing Test
+                </h1>
+                <span className="text-xs sm:text-sm">UP Police SI/ASI - Computer Operator</span>
+              </div>
+              <span className="sm:hidden text-xs font-bold">{selectedTest.language === 'hindi' ? 'हिंदी' : 'English'}</span>
+            </div>
+            
+            {/* Timer - always visible and prominent */}
+            <div className="text-sm sm:text-xl lg:text-2xl font-bold drop-shadow-lg text-center bg-background/20 px-2 py-1 rounded">
+              {upPoliceTestStarted ? formatTimeHMS(timeLeft) : formatTimeHMS(selectedTest.time_limit)}
+            </div>
+            
+            {/* User info - hidden on mobile landscape, shown on larger screens */}
+            <div className="hidden md:flex items-center gap-2 sm:gap-4">
+              <div className="h-10 w-10 lg:h-16 lg:w-16 rounded-xl lg:rounded-2xl border border-primary-foreground/20 bg-primary-foreground/10 flex items-center justify-center">
+                <span className="text-lg lg:text-2xl">👤</span>
+              </div>
+              <div className="text-xs lg:text-sm drop-shadow-lg">
+                <p>Test: {selectedTest.title}</p>
+                <p>Date: {new Date().toLocaleDateString()}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Content - Flexible height for mobile landscape */}
+        <div className="flex-1 flex flex-col p-2 sm:p-4 max-w-7xl mx-auto w-full min-h-0 overflow-hidden">
+          {/* Font size controls and sound toggle */}
+          <div className="flex items-center gap-2 mb-2 shrink-0 flex-wrap">
+            <button 
+              onClick={() => setUpPoliceFontSize(16)}
+              className="text-xs sm:text-sm font-medium bg-primary text-primary-foreground px-2 py-1 rounded hover:bg-primary/90"
+              title="Reset to default font size"
+            >
+              Default Font
+            </button>
+            <button 
+              onClick={() => setUpPoliceFontSize(prev => Math.min(prev + 2, 32))}
+              className="bg-primary text-primary-foreground p-1 rounded hover:bg-primary/90"
+              title="Increase font size"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+            <button 
+              onClick={() => setUpPoliceFontSize(prev => Math.max(prev - 2, 12))}
+              className="bg-primary text-primary-foreground p-1 rounded hover:bg-primary/90"
+              title="Decrease font size"
+            >
+              <Minus className="h-4 w-4" />
+            </button>
+            <button 
+              onClick={() => setUpPoliceSoundEnabled(!upPoliceSoundEnabled)}
+              className={`p-1 rounded transition-colors ${upPoliceSoundEnabled ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+              title={upPoliceSoundEnabled ? 'Turn off sound' : 'Turn on sound'}
+            >
+              {upPoliceSoundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+            </button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={resetTest}
+              className="ml-auto flex items-center gap-2"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Reset
+            </Button>
+          </div>
+          
+          {/* Content box - scrollable, takes available space */}
+          <div 
+            className="flex-1 min-h-[80px] sm:min-h-[120px] max-h-[30vh] sm:max-h-[40vh] lg:max-h-[50vh] overflow-y-auto mb-2 sm:mb-4 p-4 sm:p-6 bg-secondary/30 border-2 border-border rounded-lg"
+            style={{ 
+              fontSize: `${upPoliceFontSize}px`,
+              fontFamily: selectedTest.language === 'hindi' ? 'Mangal, sans-serif' : 'inherit',
+              lineHeight: '1.8'
+            }}
+            dangerouslySetInnerHTML={{ __html: getUPPoliceHighlightedText() }}
+          />
+          
+          {/* Textarea - compact on mobile landscape */}
+          <textarea
+            ref={textareaRef}
+            value={upPoliceTypedText}
+            onChange={handleUPPoliceTextChange}
+            onKeyDown={handleUPPoliceKeyDown}
+            onPaste={(e) => e.preventDefault()}
+            onCopy={(e) => e.preventDefault()}
+            onDrop={(e) => e.preventDefault()}
+            disabled={!upPoliceTestStarted}
+            spellCheck={false}
+            autoComplete="off"
+            style={{ 
+              fontSize: `${upPoliceFontSize}px`,
+              fontFamily: selectedTest.language === 'hindi' ? 'Mangal, sans-serif' : 'inherit'
+            }}
+            className="border-2 border-border bg-background w-full resize-none flex-shrink-0 h-20 sm:h-28 lg:h-32 p-4 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+            placeholder={upPoliceTestStarted ? 'Start typing here...' : 'Click Start to begin typing'}
+          />
+          
+          {/* Button - compact on mobile */}
+          <div className="text-center mt-2 sm:mt-4 shrink-0">
+            <Button 
+              size="lg" 
+              className="text-base sm:text-xl lg:text-2xl px-4 sm:px-6 lg:px-8 py-2 sm:py-4 lg:py-6"
+              onClick={upPoliceTestStarted ? handleUPPoliceSubmit : handleUPPoliceStart}
+            >
+              {upPoliceTestStarted ? 'Submit' : 'Start'}
+            </Button>
+          </div>
+        </div>
+      </div>
     );
   }
 
