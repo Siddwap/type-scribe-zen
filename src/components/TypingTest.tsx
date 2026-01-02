@@ -176,17 +176,24 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     }
   }, [selectedTest, wordLimitEnabled, wordLimit]);
 
+  // Standard (non-UP Police) timer effect
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isActive && timeLeft > 0) {
-      interval = setInterval(() => {
-        setTimeLeft(timeLeft - 1);
-      }, 1000);
-    } else if (timeLeft === 0) {
+    if (!isActive || isFinished) return;
+    if (upPoliceTestStarted) return; // UP Police has its own timer effect below
+
+    const intervalId = window.setInterval(() => {
+      setTimeLeft((prev) => (prev <= 1 ? 0 : prev - 1));
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [isActive, isFinished, upPoliceTestStarted]);
+
+  // Non-UP Police auto-complete when timer hits 0
+  useEffect(() => {
+    if (!upPoliceTestStarted && isActive && timeLeft === 0) {
       handleTestComplete();
     }
-    return () => clearInterval(interval);
-  }, [isActive, timeLeft]);
+  }, [timeLeft, upPoliceTestStarted, isActive]);
 
   // Auto-scroll to current word
   useEffect(() => {
