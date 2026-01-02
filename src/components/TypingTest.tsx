@@ -159,15 +159,18 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     }
   }, [selectedTest?.language]);
 
+  // Helper function to get limited words
+  const getLimitedWords = (content: string) => {
+    let testWords = content.split(' ').filter(word => word.trim() !== '');
+    if (wordLimitEnabled && testWords.length > wordLimit) {
+      testWords = testWords.slice(0, wordLimit);
+    }
+    return testWords;
+  };
+
   useEffect(() => {
     if (selectedTest) {
-      let testWords = selectedTest.content.split(' ');
-      
-      // Apply word limit if enabled
-      if (wordLimitEnabled && testWords.length > wordLimit) {
-        testWords = testWords.slice(0, wordLimit);
-      }
-      
+      const testWords = getLimitedWords(selectedTest.content);
       setWords(testWords);
       setTimeLeft(selectedTest.time_limit);
       const totalChars = testWords.join(' ').length;
@@ -362,7 +365,9 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     setUpPoliceTestStarted(false);
     if (selectedTest) {
       setTimeLeft(selectedTest.time_limit);
-      const totalChars = selectedTest.content.length;
+      // Use word-limited content for total keystrokes
+      const testWords = getLimitedWords(selectedTest.content);
+      const totalChars = testWords.join(' ').length;
       setTotalKeystrokes(totalChars);
     }
   };
@@ -755,9 +760,10 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
 
   // UP Police highlight method (as in provided reference file)
   const getUPPoliceHighlightedText = () => {
-    if (!selectedTest) return '';
+    if (!selectedTest || words.length === 0) return '';
 
-    const wordsArr = selectedTest.content.split(' ');
+    // Use the word-limited 'words' state instead of selectedTest.content
+    const wordsArr = words;
     const typedWords = upPoliceTypedText.trim().split(' ').filter(w => w.length > 0);
     const typedLen = typedWords.length;
 
@@ -812,7 +818,8 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     const endTime = Date.now();
     const timeTaken = (endTime - startTime.getTime()) / 1000;
     
-    const originalText = selectedTest.content;
+    // Use word-limited text for comparison
+    const originalText = words.join(' ');
     const comparisonResult = compareWords(originalText, upPoliceTypedText.trim());
     const { stats } = comparisonResult;
     
@@ -950,7 +957,7 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
       <UPPoliceResults
         result={upPoliceResult}
         comparison={upPoliceComparison}
-        originalText={selectedTest.content}
+        originalText={words.join(' ')}
         testDuration={selectedTest.time_limit}
         onStartNewTest={resetTest}
       />
