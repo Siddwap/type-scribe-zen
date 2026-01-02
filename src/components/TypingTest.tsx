@@ -85,6 +85,40 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const displayRef = useRef<HTMLDivElement>(null);
   const currentWordRef = useRef<HTMLSpanElement>(null);
+  const typingHallAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Initialize and manage typing hall sound
+  useEffect(() => {
+    // Create audio element for typing hall sound
+    typingHallAudioRef.current = new Audio('/audio/typing-hall-sound.m4a');
+    typingHallAudioRef.current.loop = true;
+    typingHallAudioRef.current.volume = 0.5;
+
+    return () => {
+      // Cleanup audio on unmount
+      if (typingHallAudioRef.current) {
+        typingHallAudioRef.current.pause();
+        typingHallAudioRef.current = null;
+      }
+    };
+  }, []);
+
+  // Control typing hall sound based on test state and sound setting
+  useEffect(() => {
+    const audio = typingHallAudioRef.current;
+    if (!audio) return;
+
+    const shouldPlay = isActive && !isFinished && upPoliceSoundEnabled;
+
+    if (shouldPlay) {
+      audio.play().catch(err => {
+        console.log('Audio autoplay prevented:', err);
+      });
+    } else {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+  }, [isActive, isFinished, upPoliceSoundEnabled]);
 
   // Text processing functions
   const convertToStraightQuotes = (str: string) => {
