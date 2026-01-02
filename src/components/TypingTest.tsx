@@ -997,8 +997,8 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
             </div>
           </div>
 
-          {/* Content - Flexible height for mobile landscape */}
-          <div className="flex-1 flex flex-col p-2 sm:p-4 max-w-7xl mx-auto w-full min-h-0 overflow-hidden">
+          {/* Content - Flexible height for mobile landscape max-w-7xl */}
+          <div className="flex-1 flex flex-col p-2 sm:p-4  mx-auto w-full min-h-0 overflow-hidden">
             {/* Font size controls and sound toggle */}
             <div className="flex items-center gap-2 mb-2 shrink-0 flex-wrap">
               <button
