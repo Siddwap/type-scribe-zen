@@ -70,6 +70,7 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
   const [currentTestId, setCurrentTestId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [isLoadingDailyTests, setIsLoadingDailyTests] = useState(false);
+  const [isLoadingTestContent, setIsLoadingTestContent] = useState(false);
   const [dailyTests, setDailyTests] = useState<any[]>([]);
   const [selectedExamType, setSelectedExamType] = useState<'all_exam' | 'up_police'>('all_exam');
   const [upPoliceResult, setUpPoliceResult] = useState<any>(null);
@@ -137,30 +138,30 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     return fixNukta(convertToStraightQuotes(text));
   };
 
-  // Fetch available tests and organize by category
-  const { data: availableTests = [] } = useQuery({
+  // Fetch available tests and organize by category - optimized to not fetch content initially
+  const { data: availableTests = [], isLoading: isLoadingTests } = useQuery({
     queryKey: ['typing-tests', selectedLanguage],
     queryFn: async () => {
       if (!selectedLanguage) return [];
+      // Only fetch metadata, not the full content - this speeds up loading significantly
       const { data, error } = await supabase
         .from('typing_tests')
-        .select('*')
+        .select('id, title, language, difficulty, category, time_limit, created_at')
         .eq('language', selectedLanguage)
         .eq('is_active', true)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
       
-      // Process text for each test
-      const processedTests = (data || []).map(test => ({
+      // Return tests without processing content (content will be fetched when test is selected)
+      return (data || []).map(test => ({
         ...test,
-        content: processText(test.content),
+        content: '', // Content will be loaded separately when test is selected
         language: selectedLanguage
-      }));
-      
-      return processedTests as TypingTest[];
+      })) as TypingTest[];
     },
-    enabled: !!selectedLanguage
+    enabled: !!selectedLanguage,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
 
   // Organize tests by category
@@ -323,6 +324,7 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
 
   const selectTest = async (test: any) => {
     let testToSet = test;
+    setIsLoadingTestContent(true);
     
     // If this is a test from Daily New Tests API, save it to database first
     if (selectedCategory === 'Daily New Tests') {
@@ -360,6 +362,7 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
               description: "Failed to save test to database",
               variant: "destructive"
             });
+            setIsLoadingTestContent(false);
             return;
           }
           
@@ -372,10 +375,52 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
           description: "Failed to process test",
           variant: "destructive"
         });
+        setIsLoadingTestContent(false);
         return;
+      }
+    } else {
+      // For database tests, fetch the full content if not already loaded
+      if (!test.content || test.content === '') {
+        try {
+          const { data: fullTest, error } = await supabase
+            .from('typing_tests')
+            .select('content')
+            .eq('id', test.id)
+            .single();
+          
+          if (error) {
+            console.error('Error fetching test content:', error);
+            toast({
+              title: "Error",
+              description: "Failed to load test content. Please try again.",
+              variant: "destructive"
+            });
+            setIsLoadingTestContent(false);
+            return;
+          }
+          
+          // Process the content for proper display
+          testToSet = { 
+            ...test, 
+            content: processText(fullTest.content)
+          };
+        } catch (error) {
+          console.error('Error loading test:', error);
+          toast({
+            title: "Error",
+            description: "Failed to load test. Please try again.",
+            variant: "destructive"
+          });
+          setIsLoadingTestContent(false);
+          return;
+        }
+      } else {
+        // Content already loaded (e.g., from Daily New Tests API)
+        testToSet = { ...test, content: processText(test.content) };
       }
     }
     
+    setIsLoadingTestContent(false);
     setSelectedTest(testToSet);
   };
 
@@ -1261,6 +1306,14 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
             </Button>
           </div>
           
+          {isLoadingTests ? (
+            <div className="text-center py-12 col-span-full">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground text-lg">
+                {selectedLanguage === 'hindi' ? 'श्रेणियाँ लोड हो रही हैं...' : 'Loading categories...'}
+              </p>
+            </div>
+          ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {availableCategories.map(category => {
               let testsCount;
@@ -1288,6 +1341,7 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
               );
             })}
           </div>
+          )}
         </CardContent>
       </Card>
     );
@@ -1355,7 +1409,14 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
             {isLoadingDailyTests ? 'Loading Tests...' : 'Load Tests'}
           </Button>
 
-          {dailyTests.length > 0 && (
+          {isLoadingTestContent ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground text-lg">
+                {selectedLanguage === 'hindi' ? 'पैराग्राफ लोड हो रहा है...' : 'Loading paragraph...'}
+              </p>
+            </div>
+          ) : dailyTests.length > 0 && (
             <div className="space-y-4">
               <h3 className="font-semibold text-xl text-center">Available Tests</h3>
               <div className="grid grid-cols-1 gap-3">
@@ -1421,7 +1482,19 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
             </Button>
           </div>
           
-          {categoryTests.length === 0 ? (
+          {isLoadingTests ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground text-lg">Loading tests...</p>
+            </div>
+          ) : isLoadingTestContent ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground text-lg">
+                {selectedLanguage === 'hindi' ? 'पैराग्राफ लोड हो रहा है...' : 'Loading paragraph...'}
+              </p>
+            </div>
+          ) : categoryTests.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-muted-foreground text-lg">No tests available in this category</p>
             </div>
@@ -1450,9 +1523,6 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
                             </div>
                           )}
                           <h3 className="font-bold text-xl mb-3 group-hover:text-primary transition-colors">{test.title}</h3>
-                          <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
-                            {test.content.substring(0, 180)}...
-                          </p>
                           <div className="flex gap-2 flex-wrap">
                             {selectedCategory !== 'Stored Tests' && (
                               <Badge variant="secondary" className="capitalize">{test.difficulty}</Badge>
@@ -1460,9 +1530,6 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
                             <Badge variant="outline" className="flex items-center gap-1">
                               <Clock className="h-3 w-3" />
                               {Math.floor(test.time_limit / 60)}:{(test.time_limit % 60).toString().padStart(2, '0')}
-                            </Badge>
-                            <Badge variant="outline">
-                              {test.content.split(' ').length} words
                             </Badge>
                           </div>
                         </div>
