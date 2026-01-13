@@ -651,21 +651,29 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
             is_qualified: isQualified
           }]);
           
-          if (insertError) {
-            console.error('Error saving UP Police results:', insertError);
+        if (insertError) {
+          console.error('Error saving UP Police results:', insertError);
+          toast({
+            title: "Error saving results",
+            description: "Your results couldn't be saved. Please try again.",
+            variant: "destructive"
+          });
+        } else {
+          // Show congratulations or better luck toast
+          if (isQualified) {
             toast({
-              title: "Error saving results",
-              description: "Your results couldn't be saved. Please try again.",
-              variant: "destructive"
+              title: "🎉 Congratulations! You PASSED! 🏆",
+              description: `Outstanding performance! Net Speed: ${netSpeed.toFixed(1)} WPM | Accuracy: ${stats.accuracy.toFixed(1)}% - You've qualified for UP Police typing test!`,
+              className: "bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 text-white border-none shadow-2xl animate-in slide-in-from-top-5 duration-500",
             });
           } else {
             toast({
-              title: "Results saved!",
-              description: isQualified 
-                ? "🎉 You have QUALIFIED the UP Police typing test!" 
-                : "Test results saved. Keep practicing!",
+              title: "💪 Better Luck Next Time!",
+              description: `Keep practicing! Net Speed: ${netSpeed.toFixed(1)} WPM | Accuracy: ${stats.accuracy.toFixed(1)}% - You need ${minSpeed} WPM & 85% accuracy to qualify.`,
+              className: "bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-500 text-white border-none shadow-2xl animate-in slide-in-from-top-5 duration-500",
             });
           }
+        }
         }
       } catch (error) {
         console.error('Error saving UP Police results:', error);
@@ -744,16 +752,30 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
             variant: "destructive"
           });
         } else {
-          toast({
-            title: "Results saved!",
-            description: qualifiesForLeaderboard 
-              ? "🎉 You qualified for the leaderboard!" 
-              : "Test results saved successfully!",
-          });
-          
+          // Show congratulations or better luck toast for standard exam
           if (qualifiesForLeaderboard) {
+            toast({
+              title: "🎉 Congratulations! Excellent Performance! 🏆",
+              description: `Amazing work! WPM: ${results.wpm} | Accuracy: ${results.accuracy.toFixed(1)}% - You've qualified for the leaderboard!`,
+              className: "bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 text-white border-none shadow-2xl animate-in slide-in-from-top-5 duration-500",
+            });
             setCurrentTestId(selectedTest.id);
             setShowLeaderboard(true);
+          } else {
+            const passed = results.accuracy >= 85;
+            if (passed) {
+              toast({
+                title: "🎉 Congratulations! Test Completed! ✨",
+                description: `Great job! WPM: ${results.wpm} | Accuracy: ${results.accuracy.toFixed(1)}% - Keep improving to reach the leaderboard!`,
+                className: "bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 text-white border-none shadow-2xl animate-in slide-in-from-top-5 duration-500",
+              });
+            } else {
+              toast({
+                title: "💪 Better Luck Next Time!",
+                description: `Keep practicing! WPM: ${results.wpm} | Accuracy: ${results.accuracy.toFixed(1)}% - You need 85% accuracy to pass.`,
+                className: "bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-500 text-white border-none shadow-2xl animate-in slide-in-from-top-5 duration-500",
+              });
+            }
           }
         }
       } else if (selectedTest?.id === 'custom-text') {
@@ -967,12 +989,20 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
             variant: "destructive"
           });
         } else {
-          toast({
-            title: "Results saved!",
-            description: isQualified 
-              ? "🎉 You have QUALIFIED the UP Police typing test!" 
-              : "Test results saved. Keep practicing!",
-          });
+          // Show congratulations or better luck toast
+          if (isQualified) {
+            toast({
+              title: "🎉 Congratulations! You PASSED! 🏆",
+              description: `Outstanding performance! Net Speed: ${netSpeed.toFixed(1)} WPM | Accuracy: ${stats.accuracy.toFixed(1)}% - You've qualified for UP Police typing test!`,
+              className: "bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 text-white border-none shadow-2xl animate-in slide-in-from-top-5 duration-500",
+            });
+          } else {
+            toast({
+              title: "💪 Better Luck Next Time!",
+              description: `Keep practicing! Net Speed: ${netSpeed.toFixed(1)} WPM | Accuracy: ${stats.accuracy.toFixed(1)}% - You need ${minSpeed} WPM & 85% accuracy to qualify.`,
+              className: "bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-500 text-white border-none shadow-2xl animate-in slide-in-from-top-5 duration-500",
+            });
+          }
         }
       }
     } catch (error) {
