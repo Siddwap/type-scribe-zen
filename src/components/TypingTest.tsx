@@ -326,19 +326,23 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     let testToSet = test;
     setIsLoadingTestContent(true);
     
-    // If this is a test from Daily New Tests API, save it to database first
-    if (selectedCategory === 'Daily New Tests') {
+    // Check if this test already has content (from API) or needs to be fetched (from database)
+    const hasContent = test.content && test.content.trim() !== '';
+    
+    if (hasContent) {
+      // Test already has content (e.g., from Daily New Tests API)
+      // Save it to database for leaderboard tracking
       try {
-        // Check if test already exists in database
+        // Check if test already exists in database by title (faster than matching content)
         const { data: existingTest } = await supabase
           .from('typing_tests')
           .select('id')
-          .eq('content', test.content)
           .eq('title', test.title)
+          .eq('language', selectedLanguage)
           .maybeSingle();
         
         if (existingTest) {
-          testToSet = { ...test, id: existingTest.id };
+          testToSet = { ...test, id: existingTest.id, content: processText(test.content) };
         } else {
           // Insert the API test into database
           const { data: newTest, error } = await supabase
@@ -357,66 +361,51 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
           
           if (error) {
             console.error('Error saving API test to database:', error);
-            toast({
-              title: "Error",
-              description: "Failed to save test to database",
-              variant: "destructive"
-            });
-            setIsLoadingTestContent(false);
-            return;
+            // Still allow test to proceed even if saving fails
+            testToSet = { ...test, content: processText(test.content) };
+          } else {
+            testToSet = { ...test, id: newTest.id, content: processText(test.content) };
           }
-          
-          testToSet = { ...test, id: newTest.id };
         }
       } catch (error) {
         console.error('Error handling API test:', error);
-        toast({
-          title: "Error",
-          description: "Failed to process test",
-          variant: "destructive"
-        });
-        setIsLoadingTestContent(false);
-        return;
+        // Still allow test to proceed even if database operation fails
+        testToSet = { ...test, content: processText(test.content) };
       }
     } else {
-      // For database tests, fetch the full content if not already loaded
-      if (!test.content || test.content === '') {
-        try {
-          const { data: fullTest, error } = await supabase
-            .from('typing_tests')
-            .select('content')
-            .eq('id', test.id)
-            .single();
-          
-          if (error) {
-            console.error('Error fetching test content:', error);
-            toast({
-              title: "Error",
-              description: "Failed to load test content. Please try again.",
-              variant: "destructive"
-            });
-            setIsLoadingTestContent(false);
-            return;
-          }
-          
-          // Process the content for proper display
-          testToSet = { 
-            ...test, 
-            content: processText(fullTest.content)
-          };
-        } catch (error) {
-          console.error('Error loading test:', error);
+      // For database tests, fetch the full content
+      try {
+        const { data: fullTest, error } = await supabase
+          .from('typing_tests')
+          .select('content')
+          .eq('id', test.id)
+          .maybeSingle();
+        
+        if (error || !fullTest) {
+          console.error('Error fetching test content:', error);
           toast({
             title: "Error",
-            description: "Failed to load test. Please try again.",
+            description: "Failed to load test content. Please try again.",
             variant: "destructive"
           });
           setIsLoadingTestContent(false);
           return;
         }
-      } else {
-        // Content already loaded (e.g., from Daily New Tests API)
-        testToSet = { ...test, content: processText(test.content) };
+        
+        // Process the content for proper display
+        testToSet = { 
+          ...test, 
+          content: processText(fullTest.content)
+        };
+      } catch (error) {
+        console.error('Error loading test:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load test. Please try again.",
+          variant: "destructive"
+        });
+        setIsLoadingTestContent(false);
+        return;
       }
     }
     
