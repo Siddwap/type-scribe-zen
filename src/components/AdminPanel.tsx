@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Trash2, Edit, Plus, Save, X, Users, CheckCircle, XCircle, Ban, UserCheck, History, Download, CalendarIcon, FileText } from 'lucide-react';
+import { Trash2, Edit, Plus, Save, X, Users, CheckCircle, XCircle, Ban, UserCheck, History, Download, CalendarIcon, FileText, Upload, FileJson } from 'lucide-react';
 import { NoticeManager } from './NoticeManager';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -76,6 +76,11 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
   const [selectedUserForHistory, setSelectedUserForHistory] = useState<string | null>(null);
   const [selectedDateForReport, setSelectedDateForReport] = useState<Date>();
   const [selectedTestForReport, setSelectedTestForReport] = useState<string | null>(null);
+
+  // Bulk import state
+  const [bulkJsonText, setBulkJsonText] = useState('');
+  const [isBulkImporting, setIsBulkImporting] = useState(false);
+  const [bulkImportResults, setBulkImportResults] = useState<{ success: number; failed: number; errors: string[] } | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -486,6 +491,95 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
     return `${seconds}s`;
   };
 
+  // Bulk import handler
+  const handleBulkImport = async (jsonData: string) => {
+    setIsBulkImporting(true);
+    setBulkImportResults(null);
+
+    try {
+      const parsed = JSON.parse(jsonData);
+      
+      if (!parsed.paragraphs || !Array.isArray(parsed.paragraphs)) {
+        throw new Error('Invalid JSON format. Expected { "paragraphs": [...] }');
+      }
+
+      const paragraphs = parsed.paragraphs;
+      let successCount = 0;
+      let failedCount = 0;
+      const errors: string[] = [];
+
+      for (const para of paragraphs) {
+        try {
+          if (!para.title || !para.content || !para.category) {
+            throw new Error(`Missing required fields (title, content, category)`);
+          }
+
+          const timeLimit = parseInt(para.time) || 10;
+          const language = (para.language?.toLowerCase() === 'hindi' ? 'hindi' : 'english') as 'english' | 'hindi';
+          const difficulty = (['easy', 'medium', 'hard'].includes(para.difficulty?.toLowerCase()) 
+            ? para.difficulty.toLowerCase() 
+            : 'medium') as 'easy' | 'medium' | 'hard';
+
+          const { error } = await supabase
+            .from('typing_tests')
+            .insert([{
+              title: para.title.trim(),
+              content: para.content.trim(),
+              language: language,
+              difficulty: difficulty,
+              category: para.category.trim(),
+              time_limit: timeLimit * 60 // Convert minutes to seconds
+            }]);
+
+          if (error) throw error;
+          successCount++;
+        } catch (err: any) {
+          failedCount++;
+          errors.push(`"${para.title || para.id || 'Unknown'}": ${err.message}`);
+        }
+      }
+
+      setBulkImportResults({ success: successCount, failed: failedCount, errors });
+
+      if (successCount > 0) {
+        toast({
+          title: "Bulk Import Complete",
+          description: `Successfully created ${successCount} test(s)${failedCount > 0 ? `, ${failedCount} failed` : ''}`,
+        });
+        refetchTests();
+        queryClient.invalidateQueries({ queryKey: ['typing-tests'] });
+      } else {
+        toast({
+          title: "Import Failed",
+          description: "No tests were imported. Check the errors below.",
+          variant: "destructive",
+        });
+      }
+    } catch (err: any) {
+      toast({
+        title: "JSON Parse Error",
+        description: err.message,
+        variant: "destructive",
+      });
+      setBulkImportResults({ success: 0, failed: 0, errors: [err.message] });
+    } finally {
+      setIsBulkImporting(false);
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      setBulkJsonText(content);
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // Reset input
+  };
+
   // Fetch leaderboard data for reports with additional data
   const { data: allTimeTopUsers = [] } = useQuery({
     queryKey: ['all-time-leaderboard'],
@@ -783,8 +877,9 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="create-test" className="space-y-4">
-            <TabsList className="grid w-full grid-cols-5">
+            <TabsList className="grid w-full grid-cols-6">
               <TabsTrigger value="create-test">Create Test</TabsTrigger>
+              <TabsTrigger value="bulk-import">Bulk Import</TabsTrigger>
               <TabsTrigger value="manage-tests">Manage Tests</TabsTrigger>
               <TabsTrigger value="manage-categories">Manage Categories</TabsTrigger>
               <TabsTrigger value="users">Manage Users</TabsTrigger>
@@ -876,6 +971,128 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
                   {isSubmitting ? 'Creating...' : 'Create Test'}
                 </Button>
               </form>
+            </TabsContent>
+
+            <TabsContent value="bulk-import">
+              <div className="space-y-6">
+                <div className="bg-muted/50 p-4 rounded-lg border border-border">
+                  <h3 className="font-semibold mb-2 flex items-center gap-2">
+                    <FileJson className="h-5 w-5" />
+                    JSON Format Reference
+                  </h3>
+                  <pre className="text-xs bg-background p-3 rounded overflow-x-auto border">
+{`{
+  "paragraphs": [
+    {
+      "id": "1",
+      "title": "Test Title",
+      "content": "Paragraph text content...",
+      "category": "Category Name",
+      "difficulty": "easy | medium | hard",
+      "time": "15",
+      "language": "English | Hindi"
+    }
+  ]
+}`}
+                  </pre>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <Label htmlFor="json-file" className="cursor-pointer">
+                      <div className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors">
+                        <Upload className="h-4 w-4" />
+                        Upload JSON File
+                      </div>
+                      <input
+                        id="json-file"
+                        type="file"
+                        accept=".json"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                      />
+                    </Label>
+                    <span className="text-sm text-muted-foreground">or paste JSON below</span>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="bulk-json">JSON Data</Label>
+                    <Textarea
+                      id="bulk-json"
+                      value={bulkJsonText}
+                      onChange={(e) => setBulkJsonText(e.target.value)}
+                      placeholder='{"paragraphs": [...]}'
+                      className="min-h-[300px] font-mono text-sm"
+                    />
+                  </div>
+
+                  <div className="flex gap-4">
+                    <Button 
+                      onClick={() => handleBulkImport(bulkJsonText)}
+                      disabled={isBulkImporting || !bulkJsonText.trim()}
+                      className="flex items-center gap-2"
+                    >
+                      {isBulkImporting ? (
+                        <>
+                          <div className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                          Importing...
+                        </>
+                      ) : (
+                        <>
+                          <FileJson className="h-4 w-4" />
+                          Import Tests
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setBulkJsonText('');
+                        setBulkImportResults(null);
+                      }}
+                      disabled={isBulkImporting}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+
+                  {bulkImportResults && (
+                    <div className={cn(
+                      "p-4 rounded-lg border",
+                      bulkImportResults.success > 0 && bulkImportResults.failed === 0 
+                        ? "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800"
+                        : bulkImportResults.failed > 0 
+                          ? "bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-800"
+                          : "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800"
+                    )}>
+                      <div className="flex items-center gap-4 mb-2">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="h-5 w-5 text-green-600" />
+                          <span className="font-medium">{bulkImportResults.success} Successful</span>
+                        </div>
+                        {bulkImportResults.failed > 0 && (
+                          <div className="flex items-center gap-2">
+                            <XCircle className="h-5 w-5 text-red-600" />
+                            <span className="font-medium">{bulkImportResults.failed} Failed</span>
+                          </div>
+                        )}
+                      </div>
+                      {bulkImportResults.errors.length > 0 && (
+                        <div className="mt-2">
+                          <p className="text-sm font-medium mb-1">Errors:</p>
+                          <ScrollArea className="h-[100px]">
+                            <ul className="text-sm text-muted-foreground space-y-1">
+                              {bulkImportResults.errors.map((err, idx) => (
+                                <li key={idx} className="text-red-600 dark:text-red-400">• {err}</li>
+                              ))}
+                            </ul>
+                          </ScrollArea>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
             </TabsContent>
 
             <TabsContent value="manage-tests">
