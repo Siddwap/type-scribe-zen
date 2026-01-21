@@ -80,6 +80,7 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
   // Bulk import state
   const [bulkJsonText, setBulkJsonText] = useState('');
   const [isBulkImporting, setIsBulkImporting] = useState(false);
+  const [bulkImportProgress, setBulkImportProgress] = useState({ current: 0, total: 0 });
   const [bulkImportResults, setBulkImportResults] = useState<{ success: number; failed: number; errors: string[] } | null>(null);
 
   const queryClient = useQueryClient();
@@ -495,6 +496,7 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
   const handleBulkImport = async (jsonData: string) => {
     setIsBulkImporting(true);
     setBulkImportResults(null);
+    setBulkImportProgress({ current: 0, total: 0 });
 
     try {
       const parsed = JSON.parse(jsonData);
@@ -504,11 +506,17 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
       }
 
       const paragraphs = parsed.paragraphs;
+      const total = paragraphs.length;
+      setBulkImportProgress({ current: 0, total });
+      
       let successCount = 0;
       let failedCount = 0;
       const errors: string[] = [];
 
-      for (const para of paragraphs) {
+      for (let i = 0; i < paragraphs.length; i++) {
+        const para = paragraphs[i];
+        setBulkImportProgress({ current: i + 1, total });
+        
         try {
           if (!para.title || !para.content || !para.category) {
             throw new Error(`Missing required fields (title, content, category)`);
@@ -1026,34 +1034,59 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
                     />
                   </div>
 
-                  <div className="flex gap-4">
-                    <Button 
-                      onClick={() => handleBulkImport(bulkJsonText)}
-                      disabled={isBulkImporting || !bulkJsonText.trim()}
-                      className="flex items-center gap-2"
-                    >
-                      {isBulkImporting ? (
-                        <>
-                          <div className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                          Importing...
-                        </>
-                      ) : (
-                        <>
-                          <FileJson className="h-4 w-4" />
-                          Import Tests
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setBulkJsonText('');
-                        setBulkImportResults(null);
-                      }}
-                      disabled={isBulkImporting}
-                    >
-                      Clear
-                    </Button>
+                  <div className="space-y-4">
+                    <div className="flex gap-4">
+                      <Button 
+                        onClick={() => handleBulkImport(bulkJsonText)}
+                        disabled={isBulkImporting || !bulkJsonText.trim()}
+                        className="flex items-center gap-2"
+                      >
+                        {isBulkImporting ? (
+                          <>
+                            <div className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                            Importing...
+                          </>
+                        ) : (
+                          <>
+                            <FileJson className="h-4 w-4" />
+                            Import Tests
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setBulkJsonText('');
+                          setBulkImportResults(null);
+                          setBulkImportProgress({ current: 0, total: 0 });
+                        }}
+                        disabled={isBulkImporting}
+                      >
+                        Clear
+                      </Button>
+                    </div>
+
+                    {isBulkImporting && bulkImportProgress.total > 0 && (
+                      <div className="space-y-2 p-4 rounded-lg border bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800">
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="font-medium text-blue-700 dark:text-blue-300">
+                            Importing tests...
+                          </span>
+                          <span className="font-bold text-blue-800 dark:text-blue-200">
+                            {Math.round((bulkImportProgress.current / bulkImportProgress.total) * 100)}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-blue-200 dark:bg-blue-900 rounded-full h-3 overflow-hidden">
+                          <div 
+                            className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-300 ease-out"
+                            style={{ width: `${(bulkImportProgress.current / bulkImportProgress.total) * 100}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-blue-600 dark:text-blue-400">
+                          {bulkImportProgress.current} of {bulkImportProgress.total} tests processed
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {bulkImportResults && (
