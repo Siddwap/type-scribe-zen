@@ -606,6 +606,48 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
     e.target.value = ''; // Reset input
   };
 
+  // Export category tests as JSON
+  const handleExportCategory = (category: string) => {
+    const categoryTests = tests.filter(t => t.category === category);
+    
+    if (categoryTests.length === 0) {
+      toast({
+        title: 'No Tests',
+        description: 'No tests found in this category to export',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Format to match import JSON structure
+    const exportData = {
+      paragraphs: categoryTests.map(test => ({
+        title: test.title,
+        content: test.content,
+        category: test.category,
+        difficulty: test.difficulty,
+        time: Math.floor(test.time_limit / 60), // Convert seconds to minutes
+        language: test.language.charAt(0).toUpperCase() + test.language.slice(1) // Capitalize
+      }))
+    };
+
+    // Create and download JSON file
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${category.replace(/\s+/g, '_')}_tests_backup.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: 'Export Successful',
+      description: `Exported ${categoryTests.length} test(s) from "${category}"`,
+    });
+  };
+
   // Fetch leaderboard data for reports with additional data
   const { data: allTimeTopUsers = [] } = useQuery({
     queryKey: ['all-time-leaderboard'],
@@ -1396,6 +1438,14 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
                               </>
                             ) : (
                               <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleExportCategory(category)}
+                                  title="Export category tests as JSON"
+                                >
+                                  <Download className="h-4 w-4" />
+                                </Button>
                                 <Button
                                   size="sm"
                                   variant="outline"
