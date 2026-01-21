@@ -143,22 +143,38 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
     queryKey: ['typing-tests', selectedLanguage],
     queryFn: async () => {
       if (!selectedLanguage) return [];
-      // Only fetch metadata, not the full content - this speeds up loading significantly
-      const { data, error } = await supabase
-        .from('typing_tests')
-        .select('id, title, language, difficulty, category, time_limit, created_at')
-        .eq('language', selectedLanguage)
-        .eq('is_active', true)
-        .order('created_at', { ascending: false });
       
-      if (error) throw error;
+      // Fetch all tests by paginating to overcome the 1000 row limit
+      let allTests: TypingTest[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      let hasMore = true;
       
-      // Return tests without processing content (content will be fetched when test is selected)
-      return (data || []).map(test => ({
-        ...test,
-        content: '', // Content will be loaded separately when test is selected
-        language: selectedLanguage
-      })) as TypingTest[];
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('typing_tests')
+          .select('id, title, language, difficulty, category, time_limit, created_at')
+          .eq('language', selectedLanguage)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false })
+          .range(from, from + pageSize - 1);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allTests = [...allTests, ...data.map(test => ({
+            ...test,
+            content: '', // Content will be loaded separately when test is selected
+            language: selectedLanguage
+          })) as TypingTest[]];
+          from += pageSize;
+          hasMore = data.length === pageSize;
+        } else {
+          hasMore = false;
+        }
+      }
+      
+      return allTests;
     },
     enabled: !!selectedLanguage,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes

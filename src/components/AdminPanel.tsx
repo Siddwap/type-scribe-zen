@@ -89,13 +89,31 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
   const { data: tests = [], refetch: refetchTests } = useQuery({
     queryKey: ['admin-tests'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('typing_tests')
-        .select('*')
-        .order('created_at', { ascending: false });
+      // Fetch all tests by paginating to overcome the 1000 row limit
+      let allTests: TypingTest[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      let hasMore = true;
       
-      if (error) throw error;
-      return data as TypingTest[];
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('typing_tests')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(from, from + pageSize - 1);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allTests = [...allTests, ...data as TypingTest[]];
+          from += pageSize;
+          hasMore = data.length === pageSize;
+        } else {
+          hasMore = false;
+        }
+      }
+      
+      return allTests;
     }
   });
 
