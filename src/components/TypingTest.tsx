@@ -1535,7 +1535,18 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
             </div>
           ) : (
             <div className="space-y-4">
-              {categoryTests.map((test) => {
+              {[...categoryTests].sort((a, b) => {
+                // Extract leading numbers from titles for numeric sorting
+                const numA = parseInt(a.title.match(/^\d+/)?.[0] || '0', 10);
+                const numB = parseInt(b.title.match(/^\d+/)?.[0] || '0', 10);
+                // If both have leading numbers, sort numerically
+                if (numA > 0 && numB > 0) return numA - numB;
+                // If only one has a number, put it first
+                if (numA > 0) return -1;
+                if (numB > 0) return 1;
+                // Otherwise, sort alphabetically by title
+                return a.title.localeCompare(b.title);
+              }).map((test) => {
                 // For Stored Tests category, get the difficulty from database or convert it
                 const displayDifficulty = selectedCategory === 'Stored Tests' 
                   ? (test.difficulty === 'hard' ? 'H' : test.difficulty === 'medium' ? 'M' : 'E')
