@@ -519,6 +519,26 @@ const Results = ({ results }: ResultsProps) => {
                 <div className="text-sm text-orange-600 dark:text-orange-400">Time Taken</div>
               </CardContent>
             </Card>
+
+            <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-950 dark:to-cyan-900 border-cyan-200 dark:border-cyan-800">
+              <CardContent className="p-4 text-center">
+                <Keyboard className="h-8 w-8 mx-auto mb-2 text-cyan-600 dark:text-cyan-400" />
+                <div className="text-3xl font-bold text-cyan-700 dark:text-cyan-300">
+                  {((results.typedKeystrokes / 5) / (results.timeTaken / 60)).toFixed(1)}
+                </div>
+                <div className="text-sm text-cyan-600 dark:text-cyan-400">Gross Speed (5 keys)</div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900 border-emerald-200 dark:border-emerald-800">
+              <CardContent className="p-4 text-center">
+                <Zap className="h-8 w-8 mx-auto mb-2 text-emerald-600 dark:text-emerald-400" />
+                <div className="text-3xl font-bold text-emerald-700 dark:text-emerald-300">
+                  {Math.max(0, ((results.typedKeystrokes / 5) - results.errors) / (results.timeTaken / 60)).toFixed(1)}
+                </div>
+                <div className="text-sm text-emerald-600 dark:text-emerald-400">Net Speed (5 keys)</div>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Detailed Stats */}

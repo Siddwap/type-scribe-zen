@@ -156,6 +156,22 @@ const UPPoliceResults = ({ result, comparison, originalText, testDuration, onSta
           </div>
         </div>
 
+        {/* Keystroke-based Speed Row */}
+        <div className="grid grid-cols-2 md:grid-cols-2 gap-3 sm:gap-4">
+          <StatCard 
+            label="Gross Typing Speed (5 keys = 1 word)" 
+            value={((result.typedKeystrokes / 5) / (testDuration / 60)).toFixed(2)} 
+            icon={Gauge} 
+            valueColor="text-blue-600"
+          />
+          <StatCard 
+            label="Net Typing Speed (5 keys = 1 word)" 
+            value={Math.max(0, ((result.typedKeystrokes / 5) - comparison.stats.totalErrors) / (testDuration / 60)).toFixed(2)} 
+            icon={Gauge} 
+            valueColor="text-emerald-600"
+          />
+        </div>
+
         {/* Additional Stats Row */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4">
           <StatCard label="Correct Words" value={comparison.stats.correctWords} icon={CheckCircle} valueColor="text-green-600" />
