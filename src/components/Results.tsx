@@ -18,7 +18,12 @@ import {
   Share2,
   History,
   Keyboard,
-  FileText
+  FileText,
+  Eye,
+  CheckCircle,
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -32,6 +37,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Leaderboard } from './Leaderboard';
+import TestResultDetailDialog from './TestResultDetailDialog';
 
 interface TestResults {
   wpm: number;
@@ -61,8 +67,12 @@ interface ResultsProps {
   results: TestResults | null;
 }
 
+const ITEMS_PER_PAGE = 10;
+
 const Results = ({ results }: ResultsProps) => {
   const [showAllResults, setShowAllResults] = React.useState(false);
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [selectedResultForDetails, setSelectedResultForDetails] = React.useState<any>(null);
   
   const { data: { user } = {} } = useQuery({
     queryKey: ['user'],
@@ -72,33 +82,58 @@ const Results = ({ results }: ResultsProps) => {
     },
   });
 
-  // Fetch user's test history - always fetch when component mounts
+  // Fetch ALL user's test history with pagination support
   const { data: testHistory = [], isLoading, refetch } = useQuery({
-    queryKey: ['test-history'],
+    queryKey: ['test-history-all'],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
 
-      const { data, error } = await supabase
-        .from('test_results')
-        .select(`
-          *,
-          typing_tests(title, language, category, difficulty)
-        `)
-        .eq('user_id', user.id)
-        .order('completed_at', { ascending: false })
-        .limit(20);
+      // Fetch all tests by paginating through all pages
+      let allResults: any[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+      
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('test_results')
+          .select(`
+            *,
+            typing_tests(title, language, category, difficulty, time_limit)
+          `)
+          .eq('user_id', user.id)
+          .order('completed_at', { ascending: false })
+          .range(from, from + pageSize - 1);
 
-      if (error) {
-        console.error('Error fetching test history:', error);
-        return [];
+        if (error) {
+          console.error('Error fetching test history:', error);
+          break;
+        }
+        
+        if (data && data.length > 0) {
+          allResults = [...allResults, ...data];
+          from += pageSize;
+          hasMore = data.length === pageSize;
+        } else {
+          hasMore = false;
+        }
       }
-      return data || [];
+      
+      return allResults;
     }
   });
 
+  // Pagination calculations
+  const totalPages = Math.ceil(testHistory.length / ITEMS_PER_PAGE);
+  const paginatedHistory = testHistory.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
   const handleShowAllResults = () => {
     setShowAllResults(true);
+    setCurrentPage(1);
     refetch();
   };
 
@@ -211,94 +246,126 @@ const Results = ({ results }: ResultsProps) => {
                   </Card>
                 </div>
 
-                {/* Test History Cards */}
-                <ScrollArea className="h-[600px]">
-                  <div className="space-y-3 pr-4">
-                    {testHistory.map((test: any, index: number) => {
-                      const isTopPerformer = test.wpm >= Math.max(...testHistory.map((t: any) => t.wpm)) * 0.9;
-                      return (
-                        <Card key={test.id} className={`transition-all hover:shadow-lg ${isTopPerformer ? 'border-yellow-400 dark:border-yellow-600' : ''}`}>
-                          <CardContent className="p-5">
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 text-primary font-bold text-sm">
-                                    #{index + 1}
-                                  </div>
-                                  <h4 className="font-semibold text-lg">{test.typing_tests?.title || 'Unknown Test'}</h4>
-                                  {isTopPerformer && <Trophy className="h-4 w-4 text-yellow-500" />}
-                                </div>
-                                
-                                <div className="flex gap-2 mb-3">
-                                  <Badge variant="outline" className="text-xs">
-                                    {test.typing_tests?.language === 'hindi' ? '🇮🇳 हिंदी' : '🇬🇧 English'}
-                                  </Badge>
-                                  <Badge variant="outline" className="text-xs capitalize">
-                                    {test.typing_tests?.difficulty}
-                                  </Badge>
-                                  {test.typing_tests?.category && (
-                                    <Badge variant="secondary" className="text-xs">
-                                      {test.typing_tests?.category}
-                                    </Badge>
-                                  )}
-                                </div>
+                {/* Pagination Info */}
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-sm text-muted-foreground">
+                    Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, testHistory.length)} of {testHistory.length} tests
+                  </p>
+                </div>
 
-                                 <div className="grid grid-cols-2 md:grid-cols-6 gap-3 text-sm">
-                                   <div className="flex items-center gap-2">
-                                     <Zap className="h-4 w-4 text-blue-500" />
-                                     <div>
-                                       <div className="font-bold text-lg">{Math.round(test.wpm)}</div>
-                                       <div className="text-xs text-gray-500">Net WPM</div>
-                                     </div>
-                                   </div>
-                                   
-                                   <div className="flex items-center gap-2">
-                                     <BarChart3 className="h-4 w-4 text-purple-500" />
-                                     <div>
-                                       <div className="font-bold text-lg">{Math.round(test.gross_wpm || 0)}</div>
-                                       <div className="text-xs text-gray-500">Gross WPM</div>
-                                     </div>
-                                   </div>
-                                  
-                                  <div className="flex items-center gap-2">
-                                    <Target className="h-4 w-4 text-green-500" />
-                                    <div>
-                                      <div className="font-bold text-lg">{test.accuracy.toFixed(1)}%</div>
-                                      <div className="text-xs text-gray-500">Accuracy</div>
-                                    </div>
-                                  </div>
-                                  
-                                  <div className="flex items-center gap-2">
-                                    <Clock className="h-4 w-4 text-orange-500" />
-                                    <div>
-                                      <div className="font-bold">
-                                        {test.time_taken >= 60 
-                                          ? `${Math.floor(test.time_taken / 60)}:${(test.time_taken % 60).toString().padStart(2, '0')}`
-                                          : `${test.time_taken}s`
-                                        }
-                                      </div>
-                                      <div className="text-xs text-gray-500">Time</div>
-                                    </div>
-                                  </div>
-                                  
-                                   <div className="flex items-center gap-2">
-                                     <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                                     <div>
-                                       <div className="font-bold">{test.correct_words_count || 0}</div>
-                                       <div className="text-xs text-gray-500">Correct Words</div>
-                                     </div>
-                                   </div>
-                                   
-                                   <div className="flex items-center gap-2">
-                                     <XCircle className="h-4 w-4 text-red-500" />
-                                     <div>
-                                       <div className="font-bold">{test.incorrect_words || 0}</div>
-                                       <div className="text-xs text-gray-500">Wrong Words</div>
-                                     </div>
-                                   </div>
+                {/* Test History Cards */}
+                <div className="space-y-3">
+                  {paginatedHistory.map((test: any, index: number) => {
+                    const globalIndex = ((currentPage - 1) * ITEMS_PER_PAGE) + index;
+                    const isTopPerformer = test.wpm >= Math.max(...testHistory.map((t: any) => t.wpm)) * 0.9;
+                    const isQualified = test.is_qualified ?? (test.accuracy >= 85 && (test.time_taken >= 600 || (test.total_words || 0) >= 400));
+                    const totalKeystrokes = test.total_keystrokes || (test.correct_keystrokes || 0) + (test.wrong_keystrokes || 0);
+                    
+                    return (
+                      <Card key={test.id} className={`transition-all hover:shadow-lg ${isTopPerformer ? 'border-yellow-400 dark:border-yellow-600' : ''}`}>
+                        <CardContent className="p-5">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 text-primary font-bold text-sm">
+                                  #{globalIndex + 1}
                                 </div>
+                                <h4 className="font-semibold text-lg">{test.typing_tests?.title || 'Unknown Test'}</h4>
+                                {isTopPerformer && <Trophy className="h-4 w-4 text-yellow-500" />}
+                                <Badge 
+                                  className={`text-xs ${
+                                    isQualified 
+                                      ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' 
+                                      : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                                  }`}
+                                >
+                                  {isQualified ? (
+                                    <><CheckCircle className="h-3 w-3 mr-1" /> Qualified</>
+                                  ) : (
+                                    <><AlertCircle className="h-3 w-3 mr-1" /> Not Qualified</>
+                                  )}
+                                </Badge>
+                              </div>
+                              
+                              <div className="flex gap-2 mb-3 flex-wrap">
+                                <Badge variant="outline" className="text-xs">
+                                  {test.typing_tests?.language === 'hindi' ? '🇮🇳 हिंदी' : '🇬🇧 English'}
+                                </Badge>
+                                <Badge variant="outline" className="text-xs capitalize">
+                                  {test.typing_tests?.difficulty}
+                                </Badge>
+                                {test.typing_tests?.category && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    {test.typing_tests?.category}
+                                  </Badge>
+                                )}
                               </div>
 
+                              <div className="grid grid-cols-2 md:grid-cols-7 gap-3 text-sm">
+                                <div className="flex items-center gap-2">
+                                  <Zap className="h-4 w-4 text-blue-500" />
+                                  <div>
+                                    <div className="font-bold text-lg">{Math.round(test.wpm)}</div>
+                                    <div className="text-xs text-gray-500">Net WPM</div>
+                                  </div>
+                                </div>
+                                
+                                <div className="flex items-center gap-2">
+                                  <BarChart3 className="h-4 w-4 text-purple-500" />
+                                  <div>
+                                    <div className="font-bold text-lg">{Math.round(test.gross_wpm || 0)}</div>
+                                    <div className="text-xs text-gray-500">Gross WPM</div>
+                                  </div>
+                                </div>
+                                
+                                <div className="flex items-center gap-2">
+                                  <Target className="h-4 w-4 text-green-500" />
+                                  <div>
+                                    <div className="font-bold text-lg">{test.accuracy.toFixed(1)}%</div>
+                                    <div className="text-xs text-gray-500">Accuracy</div>
+                                  </div>
+                                </div>
+                                
+                                <div className="flex items-center gap-2">
+                                  <Clock className="h-4 w-4 text-orange-500" />
+                                  <div>
+                                    <div className="font-bold">
+                                      {test.time_taken >= 60 
+                                        ? `${Math.floor(test.time_taken / 60)}:${(test.time_taken % 60).toString().padStart(2, '0')}`
+                                        : `${test.time_taken}s`
+                                      }
+                                    </div>
+                                    <div className="text-xs text-gray-500">Time</div>
+                                  </div>
+                                </div>
+                                
+                                <div className="flex items-center gap-2">
+                                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                                  <div>
+                                    <div className="font-bold">{test.correct_words_count || 0}</div>
+                                    <div className="text-xs text-gray-500">Correct</div>
+                                  </div>
+                                </div>
+                                
+                                <div className="flex items-center gap-2">
+                                  <XCircle className="h-4 w-4 text-red-500" />
+                                  <div>
+                                    <div className="font-bold">{test.incorrect_words || 0}</div>
+                                    <div className="text-xs text-gray-500">Wrong</div>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <Keyboard className="h-4 w-4 text-indigo-500" />
+                                  <div>
+                                    <div className="font-bold">{totalKeystrokes}</div>
+                                    <div className="text-xs text-gray-500">Keystrokes</div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col items-end gap-2">
                               <div className="text-right text-sm text-gray-500">
                                 <div className="font-medium">
                                   {new Date(test.completed_at).toLocaleDateString('en-US', { 
@@ -314,34 +381,94 @@ const Results = ({ results }: ResultsProps) => {
                                   })}
                                 </div>
                               </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setSelectedResultForDetails(test)}
+                                className="flex items-center gap-1"
+                              >
+                                <Eye className="h-4 w-4" />
+                                View Details
+                              </Button>
                             </div>
-                            
-                            {/* Progress bars */}
-                            <div className="mt-4 space-y-2">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-gray-500 w-20">Accuracy</span>
-                                <Progress value={test.accuracy} className="h-2 flex-1" />
-                                <span className="text-xs font-medium w-12 text-right">{test.accuracy.toFixed(1)}%</span>
-                              </div>
-                               <div className="flex items-center gap-2">
-                                 <span className="text-xs text-gray-500 w-20">Completion</span>
-                                 <Progress 
-                                   value={100} 
-                                   className="h-2 flex-1" 
-                                 />
-                                 <span className="text-xs font-medium w-12 text-right">100%</span>
-                               </div>
+                          </div>
+                          
+                          {/* Progress bars */}
+                          <div className="mt-4 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-500 w-20">Accuracy</span>
+                              <Progress value={test.accuracy} className="h-2 flex-1" />
+                              <span className="text-xs font-medium w-12 text-right">{test.accuracy.toFixed(1)}%</span>
                             </div>
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 mt-6">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronLeft className="h-4 w-4 mr-1" />
+                      Previous
+                    </Button>
+                    
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNum: number;
+                        if (totalPages <= 5) {
+                          pageNum = i + 1;
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1;
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i;
+                        } else {
+                          pageNum = currentPage - 2 + i;
+                        }
+                        
+                        return (
+                          <Button
+                            key={pageNum}
+                            variant={currentPage === pageNum ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setCurrentPage(pageNum)}
+                            className="w-10"
+                          >
+                            {pageNum}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                    >
+                      Next
+                      <ChevronRight className="h-4 w-4 ml-1" />
+                    </Button>
                   </div>
-                </ScrollArea>
+                )}
               </div>
             )}
           </CardContent>
         </Card>
+
+        {/* Test Result Detail Dialog */}
+        <TestResultDetailDialog
+          isOpen={!!selectedResultForDetails}
+          onClose={() => setSelectedResultForDetails(null)}
+          result={selectedResultForDetails}
+        />
       </TabsContent>
 
       <TabsContent value="leaderboard">
