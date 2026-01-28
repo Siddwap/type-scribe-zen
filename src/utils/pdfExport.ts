@@ -12,6 +12,8 @@ interface TestResult {
   incorrect_words: number;
   gross_wpm: number;
   completed_at: string;
+  total_keystrokes?: number;
+  is_qualified?: boolean;
   typing_tests?: {
     title: string;
     category: string;
@@ -31,6 +33,8 @@ interface TopUser {
   completed_at?: string;
   language?: string;
   test_title?: string;
+  total_keystrokes?: number;
+  is_qualified?: boolean;
 }
 
 // Configure jsPDF for UTF-8 support and load Devanagari font
@@ -107,7 +111,18 @@ const formatTime = (seconds: number): string => {
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 };
 
-export const exportUserTestHistory = async (userName: string, testHistory: TestResult[]) => {
+// Determine qualification status
+const getQualificationStatus = (result: any): string => {
+  if (result.is_qualified !== undefined && result.is_qualified !== null) {
+    return result.is_qualified ? 'Qualified' : 'Not Qualified';
+  }
+  const isQualified = result.accuracy >= 85 && 
+    (result.time_taken >= 600 || (result.total_words || 0) >= 400);
+  return isQualified ? 'Qualified' : 'Not Qualified';
+};
+
+// Generate user test history PDF document (for preview)
+export const generateUserTestHistoryPDF = async (userName: string, testHistory: TestResult[]): Promise<jsPDF> => {
   const doc = new jsPDF();
   await configurePDFForUnicode(doc);
   
@@ -133,7 +148,7 @@ export const exportUserTestHistory = async (userName: string, testHistory: TestR
     doc.text(`Average WPM: ${avgWpm.toFixed(1)} | Average Accuracy: ${avgAccuracy.toFixed(1)}% | Best WPM: ${bestWpm.toFixed(1)}`, 15, 64);
   }
   
-  // Prepare table data
+  // Prepare table data with qualification and keystrokes
   const tableData = testHistory.map((result, index) => [
     (index + 1).toString(),
     result.typing_tests?.title || 'Unknown Test',
@@ -145,26 +160,26 @@ export const exportUserTestHistory = async (userName: string, testHistory: TestR
     result.total_words?.toString() || '0',
     result.correct_words_count?.toString() || '0',
     result.incorrect_words?.toString() || '0',
-    result.gross_wpm ? Number(result.gross_wpm).toFixed(1) : 'N/A',
-    new Date(result.completed_at).toLocaleDateString(),
-    new Date(result.completed_at).toLocaleTimeString()
+    (result.total_keystrokes || 0).toString(),
+    getQualificationStatus(result),
+    new Date(result.completed_at).toLocaleDateString()
   ]);
   
   // Add table with font support for Hindi
   autoTable(doc, {
     startY: 72,
-    head: [['#', 'Test Title', 'Category', 'Lang', 'WPM', 'Acc', 'Time', 'Words', 'Correct', 'Incorrect', 'Gross', 'Date', 'Time']],
+    head: [['#', 'Test Title', 'Category', 'Lang', 'WPM', 'Acc', 'Time', 'Words', 'Correct', 'Wrong', 'Keystrokes', 'Status', 'Date']],
     body: tableData,
     theme: 'striped',
     headStyles: {
       fillColor: [99, 102, 241],
       textColor: [255, 255, 255],
-      fontSize: 8,
+      fontSize: 7,
       fontStyle: 'bold',
       halign: 'center'
     },
     bodyStyles: {
-      fontSize: 7
+      fontSize: 6
     },
     didParseCell: function(data) {
       // Use Devanagari font for Test Title column if it contains Hindi text
@@ -175,24 +190,33 @@ export const exportUserTestHistory = async (userName: string, testHistory: TestR
           data.cell.styles.font = 'NotoSansDevanagari';
         }
       }
+      // Color code qualification status
+      if (data.column.index === 11 && data.cell.raw) {
+        const text = data.cell.raw.toString();
+        if (text === 'Qualified') {
+          data.cell.styles.textColor = [22, 163, 74]; // Green
+        } else {
+          data.cell.styles.textColor = [220, 38, 38]; // Red
+        }
+      }
     },
     alternateRowStyles: {
       fillColor: [248, 250, 252]
     },
     columnStyles: {
       0: { cellWidth: 8, halign: 'center' },
-      1: { cellWidth: 28 },
-      2: { cellWidth: 18 },
-      3: { cellWidth: 12, halign: 'center' },
+      1: { cellWidth: 24 },
+      2: { cellWidth: 16 },
+      3: { cellWidth: 10, halign: 'center' },
       4: { cellWidth: 12, halign: 'center' },
-      5: { cellWidth: 12, halign: 'center' },
+      5: { cellWidth: 10, halign: 'center' },
       6: { cellWidth: 12, halign: 'center' },
       7: { cellWidth: 12, halign: 'center' },
       8: { cellWidth: 12, halign: 'center' },
-      9: { cellWidth: 12, halign: 'center' },
-      10: { cellWidth: 12, halign: 'center' },
-      11: { cellWidth: 18, halign: 'center' },
-      12: { cellWidth: 15, halign: 'center' }
+      9: { cellWidth: 10, halign: 'center' },
+      10: { cellWidth: 16, halign: 'center' },
+      11: { cellWidth: 20, halign: 'center' },
+      12: { cellWidth: 18, halign: 'center' }
     },
     margin: { left: 10, right: 10 }
   });
@@ -200,11 +224,16 @@ export const exportUserTestHistory = async (userName: string, testHistory: TestR
   // Add footer
   addFooter(doc);
   
-  // Save PDF
+  return doc;
+};
+
+export const exportUserTestHistory = async (userName: string, testHistory: TestResult[]) => {
+  const doc = await generateUserTestHistoryPDF(userName, testHistory);
   doc.save(`${userName.replace(/\s+/g, '_')}_test_history_${Date.now()}.pdf`);
 };
 
-export const exportTopUsersByDate = async (date: string, topUsers: TopUser[], testTitle?: string) => {
+// Generate top users by date PDF document (for preview)
+export const generateTopUsersByDatePDF = async (date: string, topUsers: TopUser[], testTitle?: string): Promise<jsPDF> => {
   const doc = new jsPDF();
   await configurePDFForUnicode(doc);
   
@@ -226,7 +255,7 @@ export const exportTopUsersByDate = async (date: string, topUsers: TopUser[], te
   doc.text(`Report Generated: ${new Date().toLocaleString()}`, 15, 58);
   doc.text('Qualification: 85%+ accuracy AND (10+ minutes OR 400+ words)', 15, 64);
   
-  // Prepare table data with test title, date and language columns
+  // Prepare table data with test title, date, language, keystrokes, and status
   const tableData = topUsers.map((user, index) => [
     (index + 1).toString(),
     user.display_name,
@@ -235,25 +264,26 @@ export const exportTopUsersByDate = async (date: string, topUsers: TopUser[], te
     `${Number(user.accuracy).toFixed(1)}%`,
     formatTime(user.time_taken),
     user.total_words?.toString() || '0',
-    user.language?.toUpperCase() || 'N/A',
+    (user.total_keystrokes || 0).toString(),
+    getQualificationStatus(user),
     new Date(date).toLocaleDateString()
   ]);
   
   // Add table with Hindi font support
   autoTable(doc, {
     startY: 72,
-    head: [['Rank', 'User Name', 'Test Title', 'WPM', 'Accuracy', 'Time', 'Words', 'Lang', 'Date']],
+    head: [['Rank', 'User', 'Test', 'WPM', 'Acc', 'Time', 'Words', 'Keys', 'Status', 'Date']],
     body: tableData,
     theme: 'striped',
     headStyles: {
       fillColor: [99, 102, 241],
       textColor: [255, 255, 255],
-      fontSize: 10,
+      fontSize: 8,
       fontStyle: 'bold',
       halign: 'center'
     },
     bodyStyles: {
-      fontSize: 9
+      fontSize: 7
     },
     didParseCell: function(data) {
       // Use Devanagari font for Test Title column (index 2) if it contains Hindi text
@@ -263,34 +293,50 @@ export const exportTopUsersByDate = async (date: string, topUsers: TopUser[], te
           data.cell.styles.font = 'NotoSansDevanagari';
         }
       }
+      // Color code qualification status
+      if (data.column.index === 8 && data.cell.raw) {
+        const text = data.cell.raw.toString();
+        if (text === 'Qualified') {
+          data.cell.styles.textColor = [22, 163, 74];
+        } else {
+          data.cell.styles.textColor = [220, 38, 38];
+        }
+      }
     },
     alternateRowStyles: {
       fillColor: [248, 250, 252]
     },
     columnStyles: {
-      0: { cellWidth: 15, halign: 'center' },
-      1: { cellWidth: 35 },
-      2: { cellWidth: 30 },
-      3: { cellWidth: 18, halign: 'center' },
-      4: { cellWidth: 18, halign: 'center' },
-      5: { cellWidth: 18, halign: 'center' },
-      6: { cellWidth: 16, halign: 'center' },
-      7: { cellWidth: 15, halign: 'center' },
-      8: { cellWidth: 20, halign: 'center' }
-    }
+      0: { cellWidth: 12, halign: 'center' },
+      1: { cellWidth: 28 },
+      2: { cellWidth: 26 },
+      3: { cellWidth: 14, halign: 'center' },
+      4: { cellWidth: 14, halign: 'center' },
+      5: { cellWidth: 14, halign: 'center' },
+      6: { cellWidth: 14, halign: 'center' },
+      7: { cellWidth: 14, halign: 'center' },
+      8: { cellWidth: 22, halign: 'center' },
+      9: { cellWidth: 18, halign: 'center' }
+    },
+    margin: { left: 10, right: 10 }
   });
   
   // Add footer
   addFooter(doc);
   
-  // Save PDF
+  return doc;
+};
+
+export const exportTopUsersByDate = async (date: string, topUsers: TopUser[], testTitle?: string) => {
+  const doc = await generateTopUsersByDatePDF(date, topUsers, testTitle);
   const fileName = testTitle 
     ? `top_users_${testTitle.replace(/\s+/g, '_')}_${Date.now()}.pdf`
     : `top_users_${date}_${Date.now()}.pdf`;
   doc.save(fileName);
 };
 
-export const exportAllTimeTopUsers = async (topUsers: TopUser[]) => {
+// Generate all-time top users PDF document (for preview)
+export const generateAllTimeTopUsersPDF = async (topUsers: TopUser[]): Promise<jsPDF> => {
   const doc = new jsPDF();
   await configurePDFForUnicode(doc);
   
@@ -308,7 +354,7 @@ export const exportAllTimeTopUsers = async (topUsers: TopUser[]) => {
   doc.text(`Report Generated: ${new Date().toLocaleString()}`, 15, 58);
   doc.text('Qualification: 85%+ accuracy AND (10+ minutes OR 400+ words)', 15, 64);
   
-  // Prepare table data with test title, date and language
+  // Prepare table data with test title, date, language, keystrokes, and status
   const tableData = topUsers.map((user, index) => [
     (index + 1).toString(),
     user.display_name,
@@ -317,25 +363,26 @@ export const exportAllTimeTopUsers = async (topUsers: TopUser[]) => {
     `${Number(user.accuracy).toFixed(1)}%`,
     formatTime(user.time_taken),
     user.total_words?.toString() || '0',
-    user.language?.toUpperCase() || 'N/A',
+    (user.total_keystrokes || 0).toString(),
+    getQualificationStatus(user),
     user.completed_at ? new Date(user.completed_at).toLocaleDateString() : 'N/A'
   ]);
   
   // Add table with Hindi font support
   autoTable(doc, {
     startY: 72,
-    head: [['Rank', 'User Name', 'Test Title', 'WPM', 'Accuracy', 'Time', 'Words', 'Lang', 'Date']],
+    head: [['Rank', 'User', 'Test', 'WPM', 'Acc', 'Time', 'Words', 'Keys', 'Status', 'Date']],
     body: tableData,
     theme: 'striped',
     headStyles: {
       fillColor: [99, 102, 241],
       textColor: [255, 255, 255],
-      fontSize: 10,
+      fontSize: 8,
       fontStyle: 'bold',
       halign: 'center'
     },
     bodyStyles: {
-      fontSize: 9
+      fontSize: 7
     },
     didParseCell: function(data) {
       // Use Devanagari font for Test Title column (index 2) if it contains Hindi text
@@ -345,31 +392,47 @@ export const exportAllTimeTopUsers = async (topUsers: TopUser[]) => {
           data.cell.styles.font = 'NotoSansDevanagari';
         }
       }
+      // Color code qualification status
+      if (data.column.index === 8 && data.cell.raw) {
+        const text = data.cell.raw.toString();
+        if (text === 'Qualified') {
+          data.cell.styles.textColor = [22, 163, 74];
+        } else {
+          data.cell.styles.textColor = [220, 38, 38];
+        }
+      }
     },
     alternateRowStyles: {
       fillColor: [248, 250, 252]
     },
     columnStyles: {
-      0: { cellWidth: 15, halign: 'center' },
-      1: { cellWidth: 35 },
-      2: { cellWidth: 30 },
-      3: { cellWidth: 18, halign: 'center' },
-      4: { cellWidth: 18, halign: 'center' },
-      5: { cellWidth: 18, halign: 'center' },
-      6: { cellWidth: 16, halign: 'center' },
-      7: { cellWidth: 15, halign: 'center' },
-      8: { cellWidth: 20, halign: 'center' }
-    }
+      0: { cellWidth: 12, halign: 'center' },
+      1: { cellWidth: 28 },
+      2: { cellWidth: 26 },
+      3: { cellWidth: 14, halign: 'center' },
+      4: { cellWidth: 14, halign: 'center' },
+      5: { cellWidth: 14, halign: 'center' },
+      6: { cellWidth: 14, halign: 'center' },
+      7: { cellWidth: 14, halign: 'center' },
+      8: { cellWidth: 22, halign: 'center' },
+      9: { cellWidth: 18, halign: 'center' }
+    },
+    margin: { left: 10, right: 10 }
   });
   
   // Add footer
   addFooter(doc);
   
-  // Save PDF
+  return doc;
+};
+
+export const exportAllTimeTopUsers = async (topUsers: TopUser[]) => {
+  const doc = await generateAllTimeTopUsersPDF(topUsers);
   doc.save(`all_time_top_users_${Date.now()}.pdf`);
 };
 
-export const exportPerTestTopUsers = async (testTitle: string, testContent: string, topUsers: TopUser[]) => {
+// Generate per-test top users PDF document (for preview)
+export const generatePerTestTopUsersPDF = async (testTitle: string, testContent: string, topUsers: TopUser[]): Promise<jsPDF> => {
   const doc = new jsPDF();
   await configurePDFForUnicode(doc);
   
@@ -415,7 +478,7 @@ export const exportPerTestTopUsers = async (testTitle: string, testContent: stri
   // Calculate startY based on content preview length
   const startY = 71 + (splitContent.length * 4) + 6;
   
-  // Prepare table data with date and language
+  // Prepare table data with keystrokes and status
   const tableData = topUsers.map((user, index) => [
     (index + 1).toString(),
     user.display_name,
@@ -423,25 +486,26 @@ export const exportPerTestTopUsers = async (testTitle: string, testContent: stri
     `${Number(user.accuracy).toFixed(1)}%`,
     formatTime(user.time_taken),
     user.total_words?.toString() || '0',
-    user.language?.toUpperCase() || 'N/A',
+    (user.total_keystrokes || 0).toString(),
+    getQualificationStatus(user),
     user.completed_at ? new Date(user.completed_at).toLocaleDateString() : 'N/A'
   ]);
   
   // Add table with Hindi font support for test title
   autoTable(doc, {
     startY: startY,
-    head: [['Rank', 'User Name', 'WPM', 'Accuracy', 'Time Taken', 'Total Words', 'Language', 'Date']],
+    head: [['Rank', 'User', 'WPM', 'Acc', 'Time', 'Words', 'Keys', 'Status', 'Date']],
     body: tableData,
     theme: 'striped',
     headStyles: {
       fillColor: [99, 102, 241],
       textColor: [255, 255, 255],
-      fontSize: 10,
+      fontSize: 8,
       fontStyle: 'bold',
       halign: 'center'
     },
     bodyStyles: {
-      fontSize: 9
+      fontSize: 7
     },
     didParseCell: function(data) {
       // Check if we need Hindi font (test title might have Hindi in it)
@@ -450,25 +514,40 @@ export const exportPerTestTopUsers = async (testTitle: string, testContent: stri
           data.cell.styles.font = 'NotoSansDevanagari';
         }
       }
+      // Color code qualification status
+      if (data.column.index === 7 && data.cell.raw) {
+        const text = data.cell.raw.toString();
+        if (text === 'Qualified') {
+          data.cell.styles.textColor = [22, 163, 74];
+        } else {
+          data.cell.styles.textColor = [220, 38, 38];
+        }
+      }
     },
     alternateRowStyles: {
       fillColor: [248, 250, 252]
     },
     columnStyles: {
-      0: { cellWidth: 18, halign: 'center' },
-      1: { cellWidth: 45 },
-      2: { cellWidth: 20, halign: 'center' },
-      3: { cellWidth: 20, halign: 'center' },
-      4: { cellWidth: 24, halign: 'center' },
-      5: { cellWidth: 24, halign: 'center' },
-      6: { cellWidth: 20, halign: 'center' },
-      7: { cellWidth: 22, halign: 'center' }
-    }
+      0: { cellWidth: 14, halign: 'center' },
+      1: { cellWidth: 35 },
+      2: { cellWidth: 16, halign: 'center' },
+      3: { cellWidth: 16, halign: 'center' },
+      4: { cellWidth: 18, halign: 'center' },
+      5: { cellWidth: 16, halign: 'center' },
+      6: { cellWidth: 16, halign: 'center' },
+      7: { cellWidth: 24, halign: 'center' },
+      8: { cellWidth: 20, halign: 'center' }
+    },
+    margin: { left: 10, right: 10 }
   });
   
   // Add footer
   addFooter(doc);
   
-  // Save PDF
+  return doc;
+};
+
+export const exportPerTestTopUsers = async (testTitle: string, testContent: string, topUsers: TopUser[]) => {
+  const doc = await generatePerTestTopUsersPDF(testTitle, testContent, topUsers);
   doc.save(`top_users_${testTitle.replace(/\s+/g, '_')}_${Date.now()}.pdf`);
 };
