@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -16,7 +16,8 @@ import {
   FileText,
   X,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Printer
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
@@ -28,6 +29,8 @@ interface TestResultDetailDialogProps {
 }
 
 const TestResultDetailDialog = ({ isOpen, onClose, result }: TestResultDetailDialogProps) => {
+  const printRef = useRef<HTMLDivElement>(null);
+  
   // Fetch the test content for paragraph comparison
   const { data: testData } = useQuery({
     queryKey: ['test-detail', result?.test_id],
@@ -37,7 +40,7 @@ const TestResultDetailDialog = ({ isOpen, onClose, result }: TestResultDetailDia
         .from('typing_tests')
         .select('content, title, language, time_limit')
         .eq('id', result.test_id)
-        .single();
+        .maybeSingle();
       
       if (error) throw error;
       return data;
@@ -78,6 +81,204 @@ const TestResultDetailDialog = ({ isOpen, onClose, result }: TestResultDetailDia
     (result.time_taken >= 600 || (result.total_words || 0) >= 400)
   );
 
+  // Render paragraph comparison
+  const renderParagraphComparison = () => {
+    if (!testData?.content) return null;
+    
+    const originalWords = testData.content.split(/\s+/);
+    const typedWords = result.typed_words_array || [];
+    const totalTypedWords = result.typed_words || 0;
+    
+    return (
+      <div className="flex flex-wrap gap-1 text-sm leading-relaxed font-mono">
+        {originalWords.map((word: string, index: number) => {
+          const typedWord = typedWords[index] || '';
+          const isTyped = index < totalTypedWords;
+          const isCorrect = isTyped && word === typedWord;
+          const isWrong = isTyped && word !== typedWord && typedWord !== '';
+          const isSkipped = isTyped && typedWord === '';
+          
+          return (
+            <span
+              key={index}
+              className={`${
+                !isTyped
+                  ? 'text-gray-400'
+                  : isCorrect
+                  ? 'text-green-600 dark:text-green-400'
+                  : isWrong
+                  ? 'text-red-600 dark:text-red-400'
+                  : isSkipped
+                  ? 'text-yellow-600 dark:text-yellow-400 line-through'
+                  : 'text-gray-400'
+              }`}
+            >
+              {word}
+              {isWrong && typedWord && (
+                <span className="text-red-500 text-xs ml-0.5">({typedWord})</span>
+              )}
+            </span>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const handlePrint = () => {
+    const printContent = printRef.current;
+    if (!printContent) return;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Please allow popups to print the result');
+      return;
+    }
+
+    const styles = `
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: system-ui, -apple-system, sans-serif; padding: 20px; line-height: 1.6; }
+        .header { text-align: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #4F46E5; }
+        .header h1 { color: #4F46E5; font-size: 24px; }
+        .test-info { background: #f3f4f6; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .test-info h2 { font-size: 18px; margin-bottom: 8px; }
+        .badges { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+        .badge { padding: 4px 12px; border-radius: 12px; font-size: 12px; background: #e5e7eb; }
+        .badge.qualified { background: #dcfce7; color: #16a34a; }
+        .badge.not-qualified { background: #fee2e2; color: #dc2626; }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+        .stat-card { padding: 15px; border: 1px solid #e5e7eb; border-radius: 8px; text-align: center; }
+        .stat-card .value { font-size: 24px; font-weight: bold; color: #4F46E5; }
+        .stat-card .label { font-size: 12px; color: #6b7280; }
+        .detailed-stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 20px; }
+        .detailed-stat { text-align: center; padding: 10px; background: #f9fafb; border-radius: 6px; }
+        .detailed-stat .value { font-size: 18px; font-weight: 600; }
+        .detailed-stat .label { font-size: 10px; color: #6b7280; }
+        .paragraph-section { margin-top: 20px; padding: 15px; border: 1px solid #e5e7eb; border-radius: 8px; }
+        .paragraph-section h3 { font-size: 16px; margin-bottom: 10px; color: #374151; }
+        .paragraph-content { font-family: monospace; font-size: 13px; line-height: 1.8; }
+        .word-correct { color: #16a34a; }
+        .word-wrong { color: #dc2626; }
+        .word-untyped { color: #9ca3af; }
+        .footer { margin-top: 20px; text-align: center; font-size: 12px; color: #9ca3af; }
+        @media print { body { padding: 10px; } }
+      </style>
+    `;
+
+    const originalWords = testData?.content?.split(/\s+/) || [];
+    const typedWordsArr = result.typed_words_array || [];
+    const totalTypedWords = result.typed_words || 0;
+    
+    let paragraphHtml = '';
+    originalWords.forEach((word: string, index: number) => {
+      const typedWord = typedWordsArr[index] || '';
+      const isTyped = index < totalTypedWords;
+      const isCorrect = isTyped && word === typedWord;
+      const isWrong = isTyped && word !== typedWord && typedWord !== '';
+      
+      let className = 'word-untyped';
+      if (isCorrect) className = 'word-correct';
+      else if (isWrong) className = 'word-wrong';
+      
+      paragraphHtml += `<span class="${className}">${word}${isWrong && typedWord ? `<span style="font-size:10px;color:#dc2626;">(${typedWord})</span>` : ''}</span> `;
+    });
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Test Result - ${result.typing_tests?.title || 'Unknown Test'}</title>
+          ${styles}
+        </head>
+        <body>
+          <div class="header">
+            <h1>TypeScribe Zen - Test Result</h1>
+            <p>typescribe.vercel.app</p>
+          </div>
+          
+          <div class="test-info">
+            <h2>${result.typing_tests?.title || 'Unknown Test'}</h2>
+            <div class="badges">
+              <span class="badge">${result.typing_tests?.language === 'hindi' ? '🇮🇳 Hindi' : '🇬🇧 English'}</span>
+              <span class="badge">${result.typing_tests?.category || 'General'}</span>
+              <span class="badge ${isQualified ? 'qualified' : 'not-qualified'}">${isQualified ? '✓ Qualified' : '✗ Not Qualified'}</span>
+            </div>
+            <p style="margin-top: 8px; font-size: 12px; color: #6b7280;">
+              Completed on ${new Date(result.completed_at).toLocaleString()}
+            </p>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="value">${Number(result.wpm).toFixed(1)}</div>
+              <div class="label">Net WPM</div>
+            </div>
+            <div class="stat-card">
+              <div class="value">${Number(result.gross_wpm || 0).toFixed(1)}</div>
+              <div class="label">Gross WPM</div>
+            </div>
+            <div class="stat-card">
+              <div class="value">${Number(result.accuracy).toFixed(1)}%</div>
+              <div class="label">Accuracy</div>
+            </div>
+            <div class="stat-card">
+              <div class="value">${formatTime(result.time_taken)}</div>
+              <div class="label">Time Taken</div>
+            </div>
+          </div>
+
+          <div class="detailed-stats">
+            <div class="detailed-stat">
+              <div class="value">${result.correct_words_count || 0}</div>
+              <div class="label">Correct Words</div>
+            </div>
+            <div class="detailed-stat">
+              <div class="value">${result.incorrect_words || 0}</div>
+              <div class="label">Wrong Words</div>
+            </div>
+            <div class="detailed-stat">
+              <div class="value">${totalKeystrokes}</div>
+              <div class="label">Total Keystrokes</div>
+            </div>
+            <div class="detailed-stat">
+              <div class="value">${grossSpeed.toFixed(1)}</div>
+              <div class="label">Gross Speed (5 keys)</div>
+            </div>
+            <div class="detailed-stat">
+              <div class="value">${netSpeed.toFixed(1)}</div>
+              <div class="label">Net Speed (5 keys)</div>
+            </div>
+          </div>
+
+          ${testData?.content ? `
+            <div class="paragraph-section">
+              <h3>📝 Paragraph Comparison</h3>
+              <div class="paragraph-content">
+                ${paragraphHtml}
+              </div>
+              <div style="margin-top: 10px; font-size: 11px; color: #6b7280;">
+                <span class="word-correct">■</span> Correct &nbsp;
+                <span class="word-wrong">■</span> Wrong &nbsp;
+                <span class="word-untyped">■</span> Not Typed
+              </div>
+            </div>
+          ` : ''}
+
+          <div class="footer">
+            <p>Generated from TypeScribe Zen | ${new Date().toLocaleString()}</p>
+          </div>
+        </body>
+      </html>
+    `);
+
+    printWindow.document.close();
+    printWindow.focus();
+    
+    setTimeout(() => {
+      printWindow.print();
+    }, 500);
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
@@ -87,14 +288,20 @@ const TestResultDetailDialog = ({ isOpen, onClose, result }: TestResultDetailDia
               <Trophy className="h-5 w-5 text-primary" />
               Test Result Details
             </div>
-            <Button variant="ghost" size="icon" onClick={onClose}>
-              <X className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handlePrint}>
+                <Printer className="h-4 w-4 mr-1" />
+                Print
+              </Button>
+              <Button variant="ghost" size="icon" onClick={onClose}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </DialogTitle>
         </DialogHeader>
         
         <ScrollArea className="h-[calc(90vh-100px)] pr-4">
-          <div className="space-y-6">
+          <div ref={printRef} className="space-y-6">
             {/* Test Info Header */}
             <Card className="bg-gradient-to-r from-primary/10 to-primary/5">
               <CardContent className="p-4">
@@ -261,6 +468,34 @@ const TestResultDetailDialog = ({ isOpen, onClose, result }: TestResultDetailDia
                   <div className="text-xs text-muted-foreground">Net Typing Speed (DB)</div>
                 </div>
               </div>
+            )}
+
+            {/* Paragraph Comparison Section */}
+            {testData?.content && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Paragraph Comparison
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="p-4 bg-muted/50 rounded-lg max-h-[300px] overflow-y-auto">
+                    {renderParagraphComparison()}
+                  </div>
+                  <div className="flex gap-4 mt-3 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <span className="w-3 h-3 bg-green-500 rounded"></span> Correct
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-3 h-3 bg-red-500 rounded"></span> Wrong
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-3 h-3 bg-gray-400 rounded"></span> Not Typed
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
             )}
 
             {/* Qualification Criteria */}

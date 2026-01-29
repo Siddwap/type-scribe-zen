@@ -13,35 +13,35 @@ interface PDFPreviewDialogProps {
 }
 
 const PDFPreviewDialog = ({ isOpen, onClose, title, generatePDF, fileName }: PDFPreviewDialogProps) => {
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [pdfDoc, setPdfDoc] = useState<jsPDF | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   React.useEffect(() => {
     if (isOpen) {
       loadPDFPreview();
     } else {
-      // Cleanup URL when dialog closes
-      if (pdfUrl) {
-        URL.revokeObjectURL(pdfUrl);
-        setPdfUrl(null);
-      }
+      // Cleanup when dialog closes
+      setPdfDataUrl(null);
       setPdfDoc(null);
+      setError(null);
     }
   }, [isOpen]);
 
   const loadPDFPreview = async () => {
     setIsLoading(true);
+    setError(null);
     try {
       const doc = await generatePDF();
       setPdfDoc(doc);
       
-      // Generate blob URL for preview
-      const blob = doc.output('blob');
-      const url = URL.createObjectURL(blob);
-      setPdfUrl(url);
-    } catch (error) {
-      console.error('Error generating PDF preview:', error);
+      // Use data URL instead of blob URL for better mobile compatibility
+      const dataUrl = doc.output('datauristring');
+      setPdfDataUrl(dataUrl);
+    } catch (err) {
+      console.error('Error generating PDF preview:', err);
+      setError('Failed to generate PDF preview. Please try downloading directly.');
     } finally {
       setIsLoading(false);
     }
@@ -51,6 +51,20 @@ const PDFPreviewDialog = ({ isOpen, onClose, title, generatePDF, fileName }: PDF
     if (pdfDoc) {
       pdfDoc.save(fileName);
       onClose();
+    }
+  };
+
+  const handleDirectDownload = async () => {
+    setIsLoading(true);
+    try {
+      const doc = await generatePDF();
+      doc.save(fileName);
+      onClose();
+    } catch (err) {
+      console.error('Error generating PDF:', err);
+      setError('Failed to generate PDF.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -72,15 +86,28 @@ const PDFPreviewDialog = ({ isOpen, onClose, title, generatePDF, fileName }: PDF
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <span className="ml-2">Generating preview...</span>
             </div>
-          ) : pdfUrl ? (
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center h-full gap-4 p-4">
+              <p className="text-muted-foreground text-center">{error}</p>
+              <Button onClick={handleDirectDownload} disabled={isLoading}>
+                <Download className="h-4 w-4 mr-2" />
+                Download PDF Directly
+              </Button>
+            </div>
+          ) : pdfDataUrl ? (
             <iframe
-              src={pdfUrl}
+              src={pdfDataUrl}
               className="w-full h-full"
               title="PDF Preview"
+              style={{ minHeight: '60vh' }}
             />
           ) : (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              Failed to generate preview
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-4">
+              <p>Failed to generate preview</p>
+              <Button onClick={handleDirectDownload} disabled={isLoading}>
+                <Download className="h-4 w-4 mr-2" />
+                Download PDF Directly
+              </Button>
             </div>
           )}
         </div>
