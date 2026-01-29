@@ -1484,17 +1484,39 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
   }
 
   // Test Selection Step for regular categories
-  const categoryTests = selectedCategory === 'Stored Tests'
-    ? availableTests.filter(test => test.category === 'Daily New Tests')
-    : availableTests.filter(test => test.category === selectedCategory);
-
-  // Filter tests based on search query
-  const filteredCategoryTests = React.useMemo(() => {
-    if (!testSearchQuery.trim()) return categoryTests;
-    const searchLower = testSearchQuery.toLowerCase();
-    return categoryTests.filter(test => 
-      test.title.toLowerCase().includes(searchLower)
+  // FIXED: Add proper null checks for categoryTests
+  const categoryTests = React.useMemo(() => {
+    if (!availableTests || !Array.isArray(availableTests)) {
+      return [];
+    }
+    
+    if (selectedCategory === 'Stored Tests') {
+      return availableTests.filter(test => 
+        test && test.category === 'Daily New Tests'
+      );
+    }
+    
+    return availableTests.filter(test => 
+      test && test.category === selectedCategory
     );
+  }, [availableTests, selectedCategory]);
+
+  // FIXED: Add proper null checks for filteredCategoryTests
+  const filteredCategoryTests = React.useMemo(() => {
+    if (!categoryTests || !Array.isArray(categoryTests)) {
+      return [];
+    }
+    
+    if (!testSearchQuery.trim()) return categoryTests;
+    
+    const searchLower = testSearchQuery.toLowerCase();
+    
+    return categoryTests.filter(test => {
+      if (!test || typeof test.title !== 'string') {
+        return false;
+      }
+      return test.title.toLowerCase().includes(searchLower);
+    });
   }, [categoryTests, testSearchQuery]);
 
   if (selectedLanguage && selectedCategory && selectedCategory !== 'Daily New Tests' && !selectedTest) {
