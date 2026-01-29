@@ -1,11 +1,11 @@
-import React, { Suspense } from 'react';
+
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Input } from '@/components/ui/input';
 import { 
   Trophy, 
   Target, 
@@ -23,8 +23,7 @@ import {
   CheckCircle,
   AlertCircle,
   ChevronLeft,
-  ChevronRight,
-  Search
+  ChevronRight
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -71,12 +70,11 @@ interface ResultsProps {
 const ITEMS_PER_PAGE = 10;
 
 const Results = ({ results }: ResultsProps) => {
-  const [showLatestResult, setShowLatestResult] = React.useState(false);
+  const [showAllResults, setShowAllResults] = React.useState(false);
   const [currentPage, setCurrentPage] = React.useState(1);
   const [selectedResultForDetails, setSelectedResultForDetails] = React.useState<any>(null);
-  const [historySearch, setHistorySearch] = React.useState('');
   
-  const { data: { user } = {}, isLoading: isLoadingUser } = useQuery({
+  const { data: { user } = {} } = useQuery({
     queryKey: ['user'],
     queryFn: async () => {
       const { data } = await supabase.auth.getUser();
@@ -85,7 +83,7 @@ const Results = ({ results }: ResultsProps) => {
   });
 
   // Fetch ALL user's test history with pagination support
-  const { data: testHistory = [], isLoading: isLoadingHistory, refetch } = useQuery({
+  const { data: testHistory = [], isLoading, refetch } = useQuery({
     queryKey: ['test-history-all'],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -123,41 +121,45 @@ const Results = ({ results }: ResultsProps) => {
       }
       
       return allResults;
-    },
-    enabled: !!user, // Only fetch if user is logged in
+    }
   });
 
-  // Filter history based on search
-  const filteredHistory = React.useMemo(() => {
-    if (!historySearch.trim()) return testHistory;
-    const searchLower = historySearch.toLowerCase();
-    return testHistory.filter((test: any) => 
-      test.typing_tests?.title?.toLowerCase().includes(searchLower) ||
-      test.typing_tests?.category?.toLowerCase().includes(searchLower) ||
-      test.typing_tests?.language?.toLowerCase().includes(searchLower)
-    );
-  }, [testHistory, historySearch]);
-
-  // Pagination calculations based on filtered history
-  const totalPages = Math.ceil(filteredHistory.length / ITEMS_PER_PAGE);
-  const paginatedHistory = filteredHistory.slice(
+  // Pagination calculations
+  const totalPages = Math.ceil(testHistory.length / ITEMS_PER_PAGE);
+  const paginatedHistory = testHistory.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
 
-  // Reset page when search changes
-  React.useEffect(() => {
+  const handleShowAllResults = () => {
+    setShowAllResults(true);
     setCurrentPage(1);
-  }, [historySearch]);
-
-  const handleShowLatestResult = () => {
-    if (results) {
-      setShowLatestResult(true);
-    }
+    refetch();
   };
 
-  // Show history by default now (showLatestResult = false means show history)
-  if (!showLatestResult) {
+  if (!results && !showAllResults) {
+    return (
+      <Card>
+        <CardContent className="p-8 text-center">
+          <Trophy className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+          <h3 className="text-lg font-semibold mb-2">No Results Yet</h3>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            Complete a typing test to see your detailed results here.
+          </p>
+          <Button 
+            variant="outline" 
+            onClick={handleShowAllResults}
+            className="flex items-center gap-2"
+          >
+            <History className="h-4 w-4" />
+            View All Results
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (showAllResults) {
   return (
     <Tabs defaultValue="history" className="space-y-6">
       <TabsList className="grid w-full grid-cols-2">
@@ -173,33 +175,21 @@ const Results = ({ results }: ResultsProps) => {
 
       <TabsContent value="history" className="space-y-6">
         <Card>
-          <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <History className="h-5 w-5" />
               Test History
             </CardTitle>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  placeholder="Search tests..." 
-                  value={historySearch}
-                  onChange={(e) => setHistorySearch(e.target.value)}
-                  className="pl-9 w-full sm:w-64"
-                />
-              </div>
-              {results && (
-                <Button 
-                  variant="outline" 
-                  onClick={handleShowLatestResult}
-                >
-                  View Latest Results
-                </Button>
-              )}
-            </div>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowAllResults(false)}
+              disabled={!results}
+            >
+              Back to Latest Results
+            </Button>
           </CardHeader>
           <CardContent>
-            {isLoadingUser || isLoadingHistory ? (
+            {isLoading ? (
               <div className="text-center py-8">
                 <div className="animate-pulse">Loading test history...</div>
               </div>
@@ -219,7 +209,7 @@ const Results = ({ results }: ResultsProps) => {
                     <CardContent className="p-4 text-center">
                       <Trophy className="h-6 w-6 mx-auto mb-2 text-blue-600 dark:text-blue-400" />
                       <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">
-                        {testHistory.length > 0 ? Math.max(...testHistory.map((t: any) => t.wpm)) : 0}
+                        {Math.max(...testHistory.map((t: any) => t.wpm))}
                       </div>
                       <div className="text-xs text-blue-600 dark:text-blue-400">Best WPM</div>
                     </CardContent>
@@ -229,7 +219,7 @@ const Results = ({ results }: ResultsProps) => {
                     <CardContent className="p-4 text-center">
                       <Target className="h-6 w-6 mx-auto mb-2 text-green-600 dark:text-green-400" />
                       <div className="text-2xl font-bold text-green-700 dark:text-green-300">
-                        {testHistory.length > 0 ? (testHistory.reduce((sum: number, t: any) => sum + t.accuracy, 0) / testHistory.length).toFixed(1) : 0}%
+                        {(testHistory.reduce((sum: number, t: any) => sum + t.accuracy, 0) / testHistory.length).toFixed(1)}%
                       </div>
                       <div className="text-xs text-green-600 dark:text-green-400">Avg Accuracy</div>
                     </CardContent>
@@ -249,7 +239,7 @@ const Results = ({ results }: ResultsProps) => {
                     <CardContent className="p-4 text-center">
                       <Clock className="h-6 w-6 mx-auto mb-2 text-orange-600 dark:text-orange-400" />
                       <div className="text-2xl font-bold text-orange-700 dark:text-orange-300">
-                        {testHistory.length > 0 ? Math.round(testHistory.reduce((sum: number, t: any) => sum + t.time_taken, 0) / 60) : 0}m
+                        {Math.round(testHistory.reduce((sum: number, t: any) => sum + t.time_taken, 0) / 60)}m
                       </div>
                       <div className="text-xs text-orange-600 dark:text-orange-400">Practice Time</div>
                     </CardContent>
@@ -259,11 +249,7 @@ const Results = ({ results }: ResultsProps) => {
                 {/* Pagination Info */}
                 <div className="flex items-center justify-between mb-4">
                   <p className="text-sm text-muted-foreground">
-                    {filteredHistory.length > 0 ? (
-                      <>Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredHistory.length)} of {filteredHistory.length} tests</>
-                    ) : (
-                      <>No tests found {historySearch && `matching "${historySearch}"`}</>
-                    )}
+                    Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, testHistory.length)} of {testHistory.length} tests
                   </p>
                 </div>
 
@@ -486,44 +472,14 @@ const Results = ({ results }: ResultsProps) => {
       </TabsContent>
 
       <TabsContent value="leaderboard">
-        <Suspense fallback={
-          <div className="text-center py-8">
-            <div className="animate-pulse">Loading leaderboard...</div>
-          </div>
-        }>
-          {user?.id ? (
-            <Leaderboard currentUserId={user.id} />
-          ) : (
-            <div className="text-center py-8">
-              <div className="animate-pulse">Loading user data...</div>
-            </div>
-          )}
-        </Suspense>
+        <Leaderboard currentUserId={user?.id} />
       </TabsContent>
     </Tabs>
   );
   }
 
   if (!results) {
-    return (
-      <Card>
-        <CardContent className="p-8 text-center">
-          <Trophy className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-          <h3 className="text-lg font-semibold mb-2">No Results Yet</h3>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
-            Complete a typing test to see your detailed results here.
-          </p>
-          <Button 
-            variant="outline" 
-            onClick={() => setShowLatestResult(false)}
-            className="flex items-center gap-2"
-          >
-            <History className="h-4 w-4" />
-            View Test History
-          </Button>
-        </CardContent>
-      </Card>
-    );
+    return null;
   }
 
   const getPerformanceLevel = (wpm: number) => {
@@ -767,7 +723,7 @@ const Results = ({ results }: ResultsProps) => {
           <div className="flex justify-center">
             <Button 
               variant="outline" 
-              onClick={() => setShowLatestResult(false)}
+              onClick={handleShowAllResults}
               className="flex items-center gap-2"
             >
               <History className="h-4 w-4" />
@@ -786,19 +742,7 @@ const Results = ({ results }: ResultsProps) => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Suspense fallback={
-              <div className="text-center py-8">
-                <div className="animate-pulse">Loading top performers...</div>
-              </div>
-            }>
-              {user?.id ? (
-                <Leaderboard testId={results.testId} currentUserId={user.id} />
-              ) : (
-                <div className="text-center py-8">
-                  <div className="animate-pulse">Loading user data...</div>
-                </div>
-              )}
-            </Suspense>
+            <Leaderboard testId={results.testId} currentUserId={user?.id} />
           </CardContent>
         </Card>
       )}

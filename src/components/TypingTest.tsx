@@ -8,9 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Clock, Target, Zap, XCircle, RotateCcw, Settings, Keyboard, FileText, Calendar as CalendarIcon, GraduationCap, Plus, Minus, Volume2, VolumeX, Search } from 'lucide-react';
+import { Clock, Target, Zap, XCircle, RotateCcw, Settings, Keyboard, FileText, Calendar as CalendarIcon, GraduationCap, Plus, Minus, Volume2, VolumeX } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import CustomTextTest from './CustomTextTest';
@@ -83,7 +82,6 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
   const [upPoliceTestStarted, setUpPoliceTestStarted] = useState(false);
   const [wordLimitEnabled, setWordLimitEnabled] = useState(true);
   const [wordLimit, setWordLimit] = useState(500);
-  const [testSearchQuery, setTestSearchQuery] = useState('');
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const displayRef = useRef<HTMLDivElement>(null);
@@ -1484,40 +1482,9 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
   }
 
   // Test Selection Step for regular categories
-  // FIXED: Add proper null checks for categoryTests
-  const categoryTests = React.useMemo(() => {
-    if (!availableTests || !Array.isArray(availableTests)) {
-      return [];
-    }
-    
-    if (selectedCategory === 'Stored Tests') {
-      return availableTests.filter(test => 
-        test && test.category === 'Daily New Tests'
-      );
-    }
-    
-    return availableTests.filter(test => 
-      test && test.category === selectedCategory
-    );
-  }, [availableTests, selectedCategory]);
-
-  // FIXED: Add proper null checks for filteredCategoryTests
-  const filteredCategoryTests = React.useMemo(() => {
-    if (!categoryTests || !Array.isArray(categoryTests)) {
-      return [];
-    }
-    
-    if (!testSearchQuery.trim()) return categoryTests;
-    
-    const searchLower = testSearchQuery.toLowerCase();
-    
-    return categoryTests.filter(test => {
-      if (!test || typeof test.title !== 'string') {
-        return false;
-      }
-      return test.title.toLowerCase().includes(searchLower);
-    });
-  }, [categoryTests, testSearchQuery]);
+  const categoryTests = selectedCategory === 'Stored Tests'
+    ? availableTests.filter(test => test.category === 'Daily New Tests')
+    : availableTests.filter(test => test.category === selectedCategory);
 
   if (selectedLanguage && selectedCategory && selectedCategory !== 'Daily New Tests' && !selectedTest) {
     return (
@@ -1544,22 +1511,10 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
               onClick={() => {
                 setSelectedCategory('');
                 setSelectedTest(null);
-                setTestSearchQuery('');
               }}
             >
               ← Change Category
             </Button>
-          </div>
-
-          {/* Search box for tests */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input 
-              placeholder={selectedLanguage === 'hindi' ? 'टेस्ट खोजें...' : 'Search tests...'}
-              value={testSearchQuery}
-              onChange={(e) => setTestSearchQuery(e.target.value)}
-              className="pl-10"
-            />
           </div>
           
           {isLoadingTests ? (
@@ -1574,18 +1529,13 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
                 {selectedLanguage === 'hindi' ? 'पैराग्राफ लोड हो रहा है...' : 'Loading paragraph...'}
               </p>
             </div>
-          ) : filteredCategoryTests.length === 0 ? (
+          ) : categoryTests.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-muted-foreground text-lg">
-                {testSearchQuery ? `No tests found matching "${testSearchQuery}"` : 'No tests available in this category'}
-              </p>
+              <p className="text-muted-foreground text-lg">No tests available in this category</p>
             </div>
           ) : (
-            <div className="space-y-4 max-h-[60vh] overflow-y-auto">
-              <p className="text-sm text-muted-foreground">
-                Showing {filteredCategoryTests.length} of {categoryTests.length} tests
-              </p>
-              {filteredCategoryTests.map((test) => {
+            <div className="space-y-4">
+              {categoryTests.map((test) => {
                 // For Stored Tests category, get the difficulty from database or convert it
                 const displayDifficulty = selectedCategory === 'Stored Tests' 
                   ? (test.difficulty === 'hard' ? 'H' : test.difficulty === 'medium' ? 'M' : 'E')

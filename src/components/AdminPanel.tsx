@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Trash2, Edit, Plus, Save, X, Users, CheckCircle, XCircle, Ban, UserCheck, History, Download, CalendarIcon, FileText, Upload, FileJson, Eye, Search } from 'lucide-react';
+import { Trash2, Edit, Plus, Save, X, Users, CheckCircle, XCircle, Ban, UserCheck, History, Download, CalendarIcon, FileText, Upload, FileJson, Eye } from 'lucide-react';
 import { NoticeManager } from './NoticeManager';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -100,12 +100,6 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
     generatePDF: () => Promise<any>;
     fileName: string;
   } | null>(null);
-
-  // Search states
-  const [testSearchQuery, setTestSearchQuery] = useState('');
-  const [userSearchQuery, setUserSearchQuery] = useState('');
-  const [categorySearchQuery, setCategorySearchQuery] = useState('');
-  const [userHistorySearch, setUserHistorySearch] = useState('');
 
   const queryClient = useQueryClient();
 
@@ -1396,27 +1390,8 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
                     </div>
                   </Card>
                 ) : (
-                  <div className="space-y-4">
-                    {/* Search box for tests */}
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input 
-                        placeholder="Search tests by title, category, or language..."
-                        value={testSearchQuery}
-                        onChange={(e) => setTestSearchQuery(e.target.value)}
-                        className="pl-10"
-                      />
-                    </div>
-                    <div className="space-y-4 max-h-96 overflow-y-auto">
-                    {tests
-                      .filter(test => {
-                        if (!testSearchQuery.trim()) return true;
-                        const searchLower = testSearchQuery.toLowerCase();
-                        return test.title.toLowerCase().includes(searchLower) ||
-                               test.category.toLowerCase().includes(searchLower) ||
-                               test.language.toLowerCase().includes(searchLower);
-                      })
-                      .map((test) => (
+                  <div className="space-y-4 max-h-96 overflow-y-auto">
+                    {tests.map((test) => (
                       <Card key={test.id} className="p-4">
                         <div className="flex items-center justify-between">
                           <div className="flex-1">
@@ -1479,7 +1454,6 @@ const AdminPanel = ({ onTestCreated }: AdminPanelProps) => {
                         </div>
                       </Card>
                     ))}
-                    </div>
                   </div>
                 )}
               </div>
