@@ -1,5 +1,4 @@
-
-import React from 'react';
+import React, { Suspense } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -77,7 +76,7 @@ const Results = ({ results }: ResultsProps) => {
   const [selectedResultForDetails, setSelectedResultForDetails] = React.useState<any>(null);
   const [historySearch, setHistorySearch] = React.useState('');
   
-  const { data: { user } = {} } = useQuery({
+  const { data: { user } = {}, isLoading: isLoadingUser } = useQuery({
     queryKey: ['user'],
     queryFn: async () => {
       const { data } = await supabase.auth.getUser();
@@ -86,7 +85,7 @@ const Results = ({ results }: ResultsProps) => {
   });
 
   // Fetch ALL user's test history with pagination support
-  const { data: testHistory = [], isLoading, refetch } = useQuery({
+  const { data: testHistory = [], isLoading: isLoadingHistory, refetch } = useQuery({
     queryKey: ['test-history-all'],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -124,7 +123,8 @@ const Results = ({ results }: ResultsProps) => {
       }
       
       return allResults;
-    }
+    },
+    enabled: !!user, // Only fetch if user is logged in
   });
 
   // Filter history based on search
@@ -199,7 +199,7 @@ const Results = ({ results }: ResultsProps) => {
             </div>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
+            {isLoadingUser || isLoadingHistory ? (
               <div className="text-center py-8">
                 <div className="animate-pulse">Loading test history...</div>
               </div>
@@ -486,14 +486,44 @@ const Results = ({ results }: ResultsProps) => {
       </TabsContent>
 
       <TabsContent value="leaderboard">
-        <Leaderboard currentUserId={user?.id} />
+        <Suspense fallback={
+          <div className="text-center py-8">
+            <div className="animate-pulse">Loading leaderboard...</div>
+          </div>
+        }>
+          {user?.id ? (
+            <Leaderboard currentUserId={user.id} />
+          ) : (
+            <div className="text-center py-8">
+              <div className="animate-pulse">Loading user data...</div>
+            </div>
+          )}
+        </Suspense>
       </TabsContent>
     </Tabs>
   );
   }
 
   if (!results) {
-    return null;
+    return (
+      <Card>
+        <CardContent className="p-8 text-center">
+          <Trophy className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+          <h3 className="text-lg font-semibold mb-2">No Results Yet</h3>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            Complete a typing test to see your detailed results here.
+          </p>
+          <Button 
+            variant="outline" 
+            onClick={() => setShowLatestResult(false)}
+            className="flex items-center gap-2"
+          >
+            <History className="h-4 w-4" />
+            View Test History
+          </Button>
+        </CardContent>
+      </Card>
+    );
   }
 
   const getPerformanceLevel = (wpm: number) => {
@@ -756,7 +786,19 @@ const Results = ({ results }: ResultsProps) => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Leaderboard testId={results.testId} currentUserId={user?.id} />
+            <Suspense fallback={
+              <div className="text-center py-8">
+                <div className="animate-pulse">Loading top performers...</div>
+              </div>
+            }>
+              {user?.id ? (
+                <Leaderboard testId={results.testId} currentUserId={user.id} />
+              ) : (
+                <div className="text-center py-8">
+                  <div className="animate-pulse">Loading user data...</div>
+                </div>
+              )}
+            </Suspense>
           </CardContent>
         </Card>
       )}
