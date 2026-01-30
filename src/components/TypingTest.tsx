@@ -1787,7 +1787,7 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
                         className="w-full max-w-[120px] px-3 py-2 border-2 rounded-lg text-center font-medium focus:ring-2 focus:ring-primary focus:border-transparent"
                       />
                       <p className="text-xs text-muted-foreground">
-                        Default: {selectedTest?.language === 'hindi' ? '400' : '500'} words for {selectedTest?.language === 'hindi' ? 'Hindi' : 'English'}
+                        Default: {selectedTest?.language === 'hindi' ? '410' : '510'} words for {selectedTest?.language === 'hindi' ? 'Hindi' : 'English'}
                       </p>
                     </div>
                   )}
