@@ -81,7 +81,7 @@ const TypingTest = ({ settings, onComplete, currentTest }: TypingTestProps) => {
   const [upPoliceTypedText, setUpPoliceTypedText] = useState('');
   const [upPoliceTestStarted, setUpPoliceTestStarted] = useState(false);
   const [wordLimitEnabled, setWordLimitEnabled] = useState(true);
-  const [wordLimit, setWordLimit] = useState(500);
+  const [wordLimit, setWordLimit] = useState(510);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const displayRef = useRef<HTMLDivElement>(null);
